@@ -1,23 +1,45 @@
 #include <Arduino.h>
 #include <Adafruit_TinyUSB.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_NeoPixel.h>
 
 // ==================== PINS ====================
 #define CRSF_RX_PIN     1
 #define CRSF_TX_PIN     0
 #define CRSF_BAUD       420000
 
-// ==================== MODES ===================
+#define OLED_SDA_PIN    4
+#define OLED_SCL_PIN    5
+#define SCREEN_WIDTH    128
+#define SCREEN_HEIGHT   64
+#define OLED_RESET      -1
+
+#define NEOPIXEL_PIN    23
+#define NUM_PIXELS      1
+
+#define USER_BUTTON_PIN 24
+#define BUILTIN_LED     25
+
+// ==================== MODES ==================
 enum DeviceMode { MODE_GAMEPAD, MODE_PASSTHROUGH };
 DeviceMode currentMode = MODE_GAMEPAD;
 
-// Channel 9 value > 1500 triggers Passthrough mode
-#define CH_PASSTHROUGH_TOGGLE 9   
+#define CH_PASSTHROUGH_TOGGLE 9   // Channel 9 > 1500 → Passthrough
 
-// ==================== OBJECTS =================
+// ==================== SCREEN =================
+uint8_t screenPage = 0;
+const uint8_t MAX_PAGES = 4;
+
+// ==================== OBJECTS ================
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_NeoPixel pixel(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
 uint8_t const desc_hid_report[] = { TUD_HID_REPORT_DESC_GAMEPAD(HID_REPORT_ID(1)) };
 Adafruit_USBD_HID usb_hid;
 
-// Gamepad Report Structure
+// Gamepad report
 typedef struct __attribute__((packed)) {
   int8_t  x, y, z, rz, rx, ry;
   uint8_t hat;
@@ -25,7 +47,7 @@ typedef struct __attribute__((packed)) {
 } gamepad_report_t;
 gamepad_report_t gpReport = {0};
 
-// ==================== CRSF ====================
+// ==================== CRSF ===================
 static const uint8_t CRSF_ADDR_RADIO = 0xC8;
 static const uint8_t CRSF_TYPE_RC_CHANNELS = 0x16;
 static const uint8_t CRSF_TYPE_LINK_STATS  = 0x14;
@@ -47,14 +69,39 @@ crsf_link_stats_t linkStats = {0};
 bool linkEstablished = false;
 uint16_t channels[16];
 
-// ==================== PARSER ==================
+// TX power table (ELRS / Crossfire)
+const uint16_t txPowerTable[] = {0, 10, 25, 50, 100, 250, 500, 1000, 2000};
+#define TX_POWER_COUNT (sizeof(txPowerTable)/sizeof(txPowerTable[0]))
+
+// ==================== PARSER =================
 enum ParseState { WAIT_ADDR, WAIT_LEN, WAIT_PAYLOAD };
 ParseState parseState = WAIT_ADDR;
 uint8_t frameBuf[64];
 uint8_t frameLen = 0;
 uint8_t framePos = 0;
 
-// ==================== CRC8 ====================
+// ==================== BUTTON =================
+int lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY = 50;
+
+// For channel 10 ( momentary >1500 → switch page)
+bool lastChannel10High = false;
+
+void handleButton() {
+  int reading = digitalRead(USER_BUTTON_PIN);
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+    if (reading == LOW && lastButtonState == HIGH) {
+      screenPage = (screenPage + 1) % MAX_PAGES;
+    }
+  }
+  lastButtonState = reading;
+}
+
+// ==================== CRC8 ===================
 uint8_t crsfCrc8(const uint8_t *data, uint8_t len) {
   uint8_t crc = 0;
   for (uint8_t i = 0; i < len; i++) {
@@ -66,7 +113,7 @@ uint8_t crsfCrc8(const uint8_t *data, uint8_t len) {
   return crc;
 }
 
-// ==================== CRSF PROCESS ============
+// ==================== CRSF PARSER ============
 void processCrsfByte(uint8_t b) {
   switch (parseState) {
     case WAIT_ADDR:
@@ -117,7 +164,7 @@ void processCrsfByte(uint8_t b) {
   }
 }
 
-// ==================== MAPPING =================
+// ==================== MAPPING ================
 int8_t mapAxis(uint16_t v) {
   int32_t c = v - 1024;
   return (int8_t)constrain((c * 127L) / 1024L, -127, 127);
@@ -127,12 +174,104 @@ int8_t mapThrottle(uint16_t v) {
   return (int8_t)constrain(((int32_t)v * 254L / 2047L) - 127, -127, 127);
 }
 
-// ==================== SETUP & LOOP ============
+// ==================== SCREEN =================
+void drawScreen() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+
+  // Header
+  display.setCursor(0, 0);
+  display.print(currentMode == MODE_GAMEPAD ? "GAMEPAD" : "PASSTHROUGH");
+  display.setCursor(100, 0);
+  display.print("P"); display.print(screenPage + 1);
+
+  if (!linkEstablished) {
+    display.setCursor(0, 25);
+    display.print("Waiting for CRSF...");
+    digitalWrite(BUILTIN_LED, HIGH);
+  } else {
+    digitalWrite(BUILTIN_LED, LOW);
+    switch (screenPage) {
+      case 0:
+        display.setCursor(0, 12); display.print("RSSI: "); display.print(linkStats.uplink_rssi_1); display.print(" dBm");
+        display.setCursor(0, 24); display.print("LQ:   "); display.print(linkStats.uplink_link_quality); display.print("%");
+        display.setCursor(0, 36);
+        if (linkStats.uplink_tx_power < TX_POWER_COUNT) {
+          display.print("PWR: "); display.print(txPowerTable[linkStats.uplink_tx_power]); display.print("mW");
+        } else {
+          display.print("PWR: ? mW");
+        }
+        display.setCursor(0, 48); display.print("SNR:  "); display.print(linkStats.uplink_snr); display.print(" dB");
+        break;
+
+      case 1: // Channels 1–8 (2 columns, 4 rows)
+        for (int i = 0; i < 8; i++) {
+          int x = (i % 2) * 64;  // 2 columns of 64 pixels
+          int y = 12 + (i / 2) * 12;  // Rows with 12-pixel spacing
+          display.setCursor(x, y);
+          display.printf("C%02d:%4d", i+1, channels[i]);
+        }
+        break;
+
+      case 2: // Channels 9–16 (2 columns, 4 rows)
+        for (int i = 8; i < 16; i++) {
+          int x = ((i-8) % 2) * 64;  // 2 columns
+          int y = 12 + ((i-8) / 2) * 12;  // Rows with 12-pixel spacing
+          display.setCursor(x, y);
+          display.printf("C%02d:%4d", i+1, channels[i]);
+        }
+        break;
+
+      case 3:
+        display.setCursor(0, 12); display.print("Ant:  "); display.print(linkStats.active_antenna);
+        display.setCursor(0, 24); display.print("Mode: "); display.print(linkStats.rf_mode);
+        display.setCursor(0, 36); display.print("D-RSSI:"); display.print(linkStats.downlink_rssi);
+        display.setCursor(0, 48); display.print("D-LQ:  "); display.print(linkStats.downlink_link_quality); display.print("%");
+        break;
+    }
+  }
+  display.display(); // Always at the end
+}
+
+void updateNeoPixel() {
+  uint32_t color;
+  if (currentMode == MODE_PASSTHROUGH) {
+    color = pixel.Color(0, 0, 255);
+  } else if (!linkEstablished) {
+    color = (millis() / 200 % 2) ? pixel.Color(255, 0, 0) : 0;
+  } else if (linkStats.uplink_link_quality > 90) {
+    color = pixel.Color(0, 255, 0);
+  } else if (linkStats.uplink_link_quality > 50) {
+    color = pixel.Color(255, 165, 0);
+  } else {
+    color = pixel.Color(255, 0, 0);
+  }
+  pixel.setPixelColor(0, color);
+  pixel.show();
+}
+
+// ==================== SETUP & LOOP ===========
 void setup() {
-  set_sys_clock_khz(200000, true);  // Overclock to 200 MHz
+  set_sys_clock_khz(200000, true);  // 200 MHz
 
   // Initialize channels to center
   for (int i = 0; i < 16; i++) channels[i] = 1024;
+
+  pinMode(USER_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BUILTIN_LED, OUTPUT);
+  digitalWrite(BUILTIN_LED, HIGH);
+
+  Wire.setSDA(OLED_SDA_PIN);
+  Wire.setSCL(OLED_SCL_PIN);
+  Wire.begin();
+  Wire.setClock(400000);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  display.display();
+
+  pixel.begin();
+  pixel.setBrightness(80);
 
   usb_hid.setPollInterval(1);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
@@ -144,14 +283,25 @@ void setup() {
 }
 
 void loop() {
-  // Always parse CRSF input
+  handleButton();
+
+  // Always parse CRSF
   while (Serial1.available()) {
     uint8_t b = Serial1.read();
     if (currentMode == MODE_PASSTHROUGH) Serial.write(b);
     processCrsfByte(b);
   }
 
-  // Switch mode based on Channel 9
+  // Switch page on channel 10 (>1500 momentary)
+  if (linkEstablished) {
+    bool channel10High = (channels[9] > 1500);  // Channel 10 = channels[9]
+    if (channel10High && !lastChannel10High) {
+      screenPage = (screenPage + 1) % MAX_PAGES;
+    }
+    lastChannel10High = channel10High;
+  }
+
+  // Switch mode on channel 9
   if (linkEstablished && channels[CH_PASSTHROUGH_TOGGLE - 1] > 1500) {
     currentMode = MODE_PASSTHROUGH;
   } else {
@@ -159,12 +309,11 @@ void loop() {
   }
 
   if (currentMode == MODE_PASSTHROUGH) {
-    // Forward USB Serial to UART (CRSF)
     while (Serial.available()) {
       Serial1.write(Serial.read());
     }
   } else {
-    // Gamepad Mode
+    // Gamepad
     gpReport.x  = mapAxis(channels[0]);
     gpReport.y  = mapAxis(channels[1]);
     gpReport.z  = mapThrottle(channels[2]);
@@ -183,5 +332,12 @@ void loop() {
     if (usb_hid.ready()) {
       usb_hid.sendReport(1, &gpReport, sizeof(gpReport));
     }
+  }
+
+  static uint32_t lastUpdate = 0;
+  if (millis() - lastUpdate >= 150) {
+    drawScreen();
+    updateNeoPixel();
+    lastUpdate = millis();
   }
 }

@@ -1,60 +1,53 @@
-# RP2040 CRSF to USB Gamepad & Passthrough
+# CRSF to USB Gamepad Converter
 
-This project converts a standard CRSF signal (typically from an ExpressLRS or Crossfire receiver) into a USB HID Gamepad using a Raspberry Pi Pico (RP2040). 
-
-It allows you to use your RC radio transmitter as a joystick for FPV simulators on your computer. It also includes a **Passthrough Mode** to configure your ELRS receiver via WiFi/USB without rewiring.
+This project turns an RP2040-based board (e.g., YD-RP2040 or Raspberry Pi Pico) into a CRSF (Crossfire/ELRS) receiver that acts as a USB HID gamepad. It includes an OLED display for telemetry monitoring, a NeoPixel for status indication, and supports passthrough mode for direct serial communication.
 
 ## Features
-
-* **Low Latency:** Configured for 1000Hz (1ms) USB polling rate.
-* **High Performance:** RP2040 overclocked to 200MHz.
-* **CRSF Support:** Full parsing of CRSF RC channels.
-* **Passthrough Mode:** Toggleable Serial Passthrough (USB <-> UART) for ELRS Configurator (activates on Channel 9).
-* **Mapping:** 6 Analog Axes + 10 Buttons.
+- **Gamepad Mode**: Maps 16 CRSF channels to a USB gamepad (axes and buttons).
+- **Passthrough Mode**: Forwards serial data between CRSF and USB for configuration tools.
+- **OLED Display**: Shows link stats (RSSI, LQ, SNR, power), channel values, and advanced telemetry across 4 pages.
+- **NeoPixel Status**: Color-coded link quality (green: good, orange: medium, red: poor; blue: passthrough; blinking red: no link).
+- **Controls**: User button or channel 10 for page switching; channel 9 for mode toggle.
+- **Overclocked**: Runs at 200 MHz for low latency.
+- **Low Latency USB**: 1 ms HID polling.
 
 ## Hardware Requirements
+- RP2040 board (e.g., YD-RP2040 or Pico).
+- SSD1306 OLED (128x64, I2C on pins 4/5).
+- NeoPixel (WS2812 on pin 23).
+- CRSF receiver connected to UART (RX: pin 1, TX: pin 0).
+- User button on pin 24 (pull-up).
+- Built-in LED on pin 25 for status.
 
-* Raspberry Pi Pico (or any RP2040 based board).
-* ELRS or Crossfire Receiver.
-
-## Wiring
-
-Connect the Receiver to the RP2040 UART0:
-
-| Receiver Pad | RP2040 Pin | Note |
-| :--- | :--- | :--- |
-| **TX** | **GP1** (RX) | Serial1 RX |
-| **RX** | **GP0** (TX) | Serial1 TX |
-| **5V** | **VBUS** (5V) | Or 3.3V if supported |
-| **GND** | **GND** | Ground |
-
-## Installation
-
-1.  Clone this repository.
-2.  Open the project in **Visual Studio Code** with the **PlatformIO** extension installed.
-3.  Connect your RP2040 board while holding the BOOTSEL button.
-4.  Upload the firmware.
+## Setup
+1. Install [PlatformIO](https://platformio.org/).
+2. Clone this repository.
+3. Update `platformio.ini` if needed (e.g., replace board with your variant).
+4. Build and upload: `pio run --target upload`.
+5. Connect CRSF receiver and power on.
 
 ## Usage
+- **Mode Switching**: Set channel 9 >1500 for passthrough; <1500 for gamepad.
+- **Page Navigation**: Press user button or momentary channel 10 >1500.
+- **Display Pages**:
+  - Page 1: RSSI, LQ, TX Power, SNR.
+  - Page 2: Channels 1-8.
+  - Page 3: Channels 9-16.
+  - Page 4: Antenna, RF Mode, Downlink RSSI/LQ.
+- The device appears as a USB gamepad in OS (Windows/Linux/Mac).
 
-### Simulator Mode (Default)
-Once connected, the device appears as a standard Gamepad/Joystick in Windows/Linux/macOS. 
-* **Sticks (Ch 1-4):** Mapped to X, Y, Z, RZ axes.
-* **Aux (Ch 5-6):** Mapped to RX, RY axes.
-* **Switches (Ch 7-16):** Mapped to buttons.
+## Channel Mapping
+- Axes: Channels 1-6 → X/Y/Z/RZ/RX/RY.
+- Buttons: Channels 7-16 → Buttons 1-10 (threshold >1500).
+- Throttle (Z) is unipolar mapping.
 
-### Passthrough Mode (ELRS Configurator)
-To update your receiver or change settings via the ELRS Configurator:
-1.  Ensure the receiver and radio are bound and linked.
-2.  Set **Channel 9 (AUX 5)** on your radio to a high value (>1500).
-3.  The device will switch to Passthrough mode.
-4.  In ELRS Configurator, select "Serial" as the flashing method and select the COM port of the Pico.
+## Libraries
+- Adafruit TinyUSB
+- Adafruit GFX & SSD1306
+- Adafruit NeoPixel
 
-## Configuration
+## License
+MIT License. See [LICENSE](LICENSE) for details.
 
-You can adjust pin definitions or baud rate in `main.cpp`:
-
-```cpp
-#define CRSF_RX_PIN     1
-#define CRSF_TX_PIN     0
-#define CRSF_BAUD       420000
+## Acknowledgments
+Based on ELRS/Crossfire protocols. Uses Earlephilhower's RP2040 Arduino core.

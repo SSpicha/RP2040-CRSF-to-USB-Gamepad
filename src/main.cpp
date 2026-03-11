@@ -293,15 +293,27 @@ void loop() {
       mutex_exit(&uartMutex);
     }
   } else {
+    // Mapping: 
+    // CH1-4: Sticks (X, Y, Yaw/RZ, Throttle/RY)
+    // CH5-6: Aux Axes (Z, RX)
+    // CH7-16: Aux Channels (Buttons)
+    
     gpReport.x  = mapAxis(localChannels[0]);
     gpReport.y  = mapAxis(localChannels[1]);
     gpReport.z  = mapAxis(localChannels[4]);
     gpReport.rz = mapAxis(localChannels[5]);
     gpReport.rx = mapAxis(localChannels[3]);
     gpReport.ry = mapThrottle(localChannels[2]);
-    gpReport.hat = 8;
-    gpReport.buttons = 0;
-    for (int i = 0; i < 10; i++) { if (localChannels[6 + i] > 1500) gpReport.buttons |= (1UL << i); }
+    gpReport.hat = 8; // Centered hat
+    gpReport.buttons = 0; // Reset buttons before setting
+
+    // Map channels 7 to 16 as buttons 1 to 10
+    for (int i = 0; i < 10; i++) {
+      if (localChannels[6 + i] > 1500) {
+        gpReport.buttons |= (1UL << i);
+      }
+    }
+
     if (memcmp(&gpReport, &lastGpReport, sizeof(gamepad_report_t)) != 0) {
       if (usb_hid.ready()) {
         usb_hid.sendReport(1, &gpReport, sizeof(gpReport));

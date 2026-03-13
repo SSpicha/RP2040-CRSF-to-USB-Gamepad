@@ -1,45 +1,31 @@
-# 🚀 RP2040 CRSF-to-USB Gamepad (v3.1)
+# 🚀 RP2040 CRSF-to-USB Gamepad PRO (v4.0-test)
 
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange?logo=platformio&style=flat-square)](https://platformio.org/)
 [![RP2040](https://img.shields.io/badge/Hardware-Raspberry%20Pi%20RP2040-blue?logo=raspberrypi&style=flat-square)](https://www.raspberrypi.com/products/rp2040/)
 [![CRSF](https://img.shields.io/badge/Protocol-TBS%20CRSF%20/%20ELRS-red?style=flat-square)](https://www.expresslrs.org/)
 
-A high-performance, low-latency USB HID Gamepad bridge for FPV simulators. This project converts **CRSF** (Crossfire/ExpressLRS) signals into a **16-bit high-resolution** USB Gamepad using the Raspberry Pi Pico (RP2040).
+**The ultimate low-latency bridge for FPV simulators.**  
+This version (v4.0) introduces **Fake CLI Mode**, allowing you to configure your ExpressLRS receiver directly through the ELRS Configurator without touching your radio.
 
 ---
 
-## ✨ Key Features (v3.1)
+## 🔥 What's New in v4.0 (Test Branch)
 
-- **⚡ Dual-Core Architecture:** 
-  - **Core 1:** Dedicated to high-speed CRSF parsing (no dropped packets).
-  - **Core 0:** Handles USB HID reports and LED status.
-- **🎯 16-bit Precision:** High-resolution axis mapping (up to 65535 steps) for buttery smooth control in simulators like Liftoff, Velocidrone, or Tryp FPV.
+- **🖥️ Integrated Fake CLI:** The device now emulates a Betaflight Flight Controller. Just open **ELRS Configurator**, click "Connect", and it will handle the rest!
+- **⚡ No More Radio Toggles:** Manual channel switching for Passthrough has been removed. All 16 channels are now free for your sim controls.
+- **🛡️ Smart Watchdog:** Automatic exit from Passthrough mode if no data is received for 5 seconds.
+- **🎯 Enhanced Dual-Core Engine:** Core 1 is dedicated to bit-perfect CRSF parsing, while Core 0 handles USB HID and CLI logic.
+
+---
+
+## ✨ Core Features
+
+- **⚡ Zero-Jitter Dual-Core Architecture:** 
+  - **Core 1:** High-speed CRSF parsing (bit-by-bit).
+  - **Core 0:** USB HID reports (1000Hz) and CLI handler.
+- **🎯 16-bit Precision:** High-resolution axis mapping (up to 65535 steps) for buttery smooth control.
 - **🚀 1000Hz USB Polling:** Native 1ms polling interval for the lowest possible input lag.
-- **🔗 16 Channels Supported:** 
-  - 6 High-resolution Analog Axes (X, Y, Z, Rz, Rx, Ry).
-  - 10 Digital Buttons (mapped from CH7 to CH16).
-- **🛠️ Smart Passthrough Mode:** Built-in USB-to-UART bridge to configure your ELRS receiver via WiFi or Serial (activated by holding CH9 for 2 seconds).
-- **🌈 RGB Status LED:** Visual feedback using WS2812 (NeoPixel).
-
----
-
-## 📸 Connection Diagram
-
-```text
-      ┌─────────────────────────────────┐
-      │         RP2040 (Pico)           │
-      │                                 │
-      │  [USB] ◄─── To Computer         │
-      │                                 │
-      │  GP0 (TX) ───► Receiver RX      │
-      │  GP1 (RX) ◄─── Receiver TX      │
-      │  VBUS (5V) ──► Receiver 5V      │
-      │  GND      ───► Receiver GND     │
-      │                                 │
-      │  GP16 (LED) ──► WS2812 RGB      │
-      └─────────────────────────────────┘
-```
-*(Place your hardware photo here: `./docs/wiring.png`)*
+- **🌈 RGB Status LED:** WS2812 (NeoPixel) visual feedback for link and mode status.
 
 ---
 
@@ -49,11 +35,11 @@ A high-performance, low-latency USB HID Gamepad bridge for FPV simulators. This 
 | :--- | :--- |
 | **🟢 Solid Green** | Link Established (RC Signal OK) |
 | **🔴 Blinking Red** | No Signal / Failsafe |
-| **🟠 Pulsing Orange** | Passthrough Mode Active (Configuring RX) |
+| **🟠 Pulsing Orange** | **CLI / Passthrough Mode Active** (Configuring RX) |
 
 ---
 
-## 🕹️ Channel Mapping
+## 🕹️ Channel Mapping (All 16 CH Free!)
 
 | Channel | HID Axis/Button | Range |
 | :--- | :--- | :--- |
@@ -67,31 +53,22 @@ A high-performance, low-latency USB HID Gamepad bridge for FPV simulators. This 
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ How to use CLI Mode
 
-1.  **Requirements:** Install [VS Code](https://code.visualstudio.com/) and the [PlatformIO IDE](https://platformio.org/platformio-ide) extension.
-2.  **Clone:** `git clone https://github.com/SSpicha/RP2040-CRSF-to-USB-Gamepad.git`
-3.  **Build & Flash:** 
-    - Connect your RP2040 board to your PC.
-    - Click the **PlatformIO: Build** (✓) or **Upload** (→) button in the status bar.
-    - The firmware uses the **Earle Philhower** core with **TinyUSB** for maximum performance.
-
----
-
-## 🔄 Passthrough Mode (ELRS Configuration)
-
-To update your ExpressLRS receiver or change settings via the ELRS Configurator:
-1.  Connect your radio and receiver (ensure they are bound).
-2.  Hold **Channel 9 (AUX 5)** at its maximum position (>1750) for **2 seconds**.
-3.  The LED will pulse **Orange**.
-4.  Open **ELRS Configurator**, select **Serial** method, and choose the Pico's COM port.
-5.  *To exit:* Hold CH9 again for 2 seconds.
+1.  Connect your RP2040 to your PC.
+2.  Open **ELRS Configurator**.
+3.  Select **"Serial"** as the flashing method.
+4.  Choose the Pico's COM port.
+5.  Click **"Build & Flash"** (or use the "WiFi" tab if your RX supports it).
+6.  The device will automatically switch to Passthrough mode (LED turns Orange) and return to Gamepad mode when finished.
 
 ---
 
-## 📜 License
+## 📜 Installation
 
-This project is open-source. Feel free to modify and adapt it for your needs!
+1.  Use **VS Code** with **PlatformIO**.
+2.  The project uses the **Earle Philhower** core and **Adafruit TinyUSB** for maximum performance.
+3.  Build & Upload to your RP2040 board.
 
 ---
 **Developed by [SSpicha](https://github.com/SSpicha)**

@@ -1,4 +1,4 @@
-# 🚀 RP2040 CRSF-to-USB Gamepad PRO (v4.0)
+# 🚀 RP2040 CRSF-to-USB Gamepad (v4.0)
 
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange?logo=platformio&style=flat-square)](https://platformio.org/)
 [![RP2040](https://img.shields.io/badge/Hardware-Raspberry%20Pi%20RP2040-blue?logo=raspberrypi&style=flat-square)](https://www.raspberrypi.com/products/rp2040/)

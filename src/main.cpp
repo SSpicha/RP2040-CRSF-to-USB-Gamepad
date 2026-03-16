@@ -9,10 +9,8 @@
 #define CRSF_BAUD       420000
 #define LED_PIN         16 // WS2812 Neopixel pin
 
-#define CH_PASSTHROUGH_TOGGLE 9   
 #define FAILSAFE_TIMEOUT_MS   500
 #define DEADBAND_THRESHOLD    4
-#define PASSTHROUGH_ACTIVATION_MS 2000 // Time in ms to hold the switch
 
 // ==================== SHARED DATA (CORE 0 <-> CORE 1) ====================
 typedef struct {
@@ -25,9 +23,13 @@ shared_data_t sharedData;
 mutex_t dataMutex;
 mutex_t uartMutex;
 
-// ==================== MODES ====================
+// ==================== MODES & CLI ====================
 enum DeviceMode { MODE_GAMEPAD, MODE_PASSTHROUGH };
 volatile DeviceMode currentMode = MODE_GAMEPAD;
+
+static char serialInBuff[64];
+static uint8_t serialInBuffLen = 0;
+static bool serialEcho = false;
 
 // ==================== USB & HID OBJECTS ====================
 uint8_t const desc_hid_report[] = {
@@ -221,6 +223,97 @@ void updateLED(bool link, bool passthrough, uint32_t lastPacket) {
   }
 }
 
+// ==================== CLI HANDLER ====================
+bool handleSerialCommand(char *cmd) {
+    if (strcmp(cmd, "version") == 0) {
+        Serial.println("Betaflight / RP2040-CRSF-Bridge 4.0.0");
+    } 
+    else if (strcmp(cmd, "status") == 0) {
+        Serial.println("System Uptime: 1337s, CPU Load: 1%");
+    }
+    else if (strcmp(cmd, "serial") == 0) {
+        Serial.println("serial 0 64 115200 57600 0 115200");
+    }
+    else if (strcmp(cmd, "get serialrx_provider") == 0) {
+        Serial.println("serialrx_provider = CRSF");
+    }
+    else if (strcmp(cmd, "get serialrx_inverted") == 0) {
+        Serial.println("serialrx_inverted = OFF");
+    }
+    else if (strcmp(cmd, "get serialrx_halfduplex") == 0) {
+        Serial.println("serialrx_halfduplex = OFF");
+    }
+    else if (strncmp(cmd, "get ", 4) == 0) {
+        // Catch-all for other 'get' commands to keep the configurator happy
+    }
+    else if (strcmp(cmd, "reboot") == 0 || strcmp(cmd, "exit") == 0 || strcmp(cmd, "save") == 0) {
+        Serial.println("Rebooting...");
+        delay(200);
+        rp2040.reboot();
+    }
+    else if (strncmp(cmd, "serialpassthrough", 17) == 0) {
+        uint32_t baud = 420000;
+        char *p = cmd + 17;
+        while (*p == ' ') p++; // skip spaces
+        if (*p) {
+            // skip index
+            while (*p && *p != ' ') p++;
+            while (*p == ' ') p++; // skip spaces
+            if (*p) {
+                baud = atol(p);
+            }
+        }
+        
+        if (baud > 0) {
+            Serial1.begin(baud);
+        }
+        
+        currentMode = MODE_PASSTHROUGH;
+        __dmb();
+        return true; // Mode changed
+    }
+    return false;
+}
+
+void checkSerialIn() {
+    while (Serial.available()) {
+        char c = Serial.read();
+        
+        if (c == '#') {
+            serialInBuffLen = 0;
+            serialEcho = true;
+            Serial.print("\r\n# ");
+            continue;
+        }
+
+        if (serialEcho && c != '\r' && c != '\n' && c != '\b') {
+            Serial.write(c);
+        }
+
+        if (c == '\r' || c == '\n') {
+            Serial.print("\r\n");
+            if (serialInBuffLen > 0) {
+                serialInBuff[serialInBuffLen] = '\0';
+                bool modeChanged = handleSerialCommand(serialInBuff);
+                serialInBuffLen = 0;
+                if (modeChanged) return;
+            }
+            Serial.print("# ");
+        }
+        else if (c == '\b' || c == 127) { // backspace
+            if (serialInBuffLen > 0) {
+                serialInBuffLen--;
+                if (serialEcho) Serial.print("\b \b");
+            }
+        }
+        else {
+            if (serialInBuffLen < sizeof(serialInBuff) - 1) {
+                serialInBuff[serialInBuffLen++] = c;
+            }
+        }
+    }
+}
+
 // ==================== CORE 0 ====================
 void setup() {
   mutex_init(&dataMutex);
@@ -254,6 +347,11 @@ void loop() {
   uint32_t localLastPacketTime;
   bool localLinkEstablished;
 
+  // Process CLI
+  if (currentMode == MODE_GAMEPAD) {
+      checkSerialIn();
+  }
+
   mutex_enter_blocking(&dataMutex);
   memcpy(localChannels, sharedData.channels, sizeof(localChannels));
   localLastPacketTime = sharedData.lastPacketTime;
@@ -265,49 +363,44 @@ void loop() {
     localChannels[2] = CRSF_MIN;
   }
 
-  static uint32_t toggleStartTime = 0;
-  bool toggleActive = (localLinkEstablished && localChannels[CH_PASSTHROUGH_TOGGLE - 1] > 1750);
-
-  if (toggleActive) {
-    if (toggleStartTime == 0) toggleStartTime = now;
-    if (now - toggleStartTime >= PASSTHROUGH_ACTIVATION_MS) {
-      currentMode = (currentMode == MODE_GAMEPAD) ? MODE_PASSTHROUGH : MODE_GAMEPAD;
-      toggleStartTime = now;
-      __dmb();
-    }
-  } else { toggleStartTime = 0; }
-
   if (currentMode == MODE_PASSTHROUGH) {
     uint8_t buffer[128];
     int available;
+    static uint32_t lastDataTime = 0;
+
     if (mutex_enter_timeout_ms(&uartMutex, 1)) {
       if ((available = Serial.available()) > 0) {
         int count = Serial.readBytes(buffer, min(available, (int)sizeof(buffer)));
         Serial1.write(buffer, count);
+        lastDataTime = now;
       }
       if ((available = Serial1.available()) > 0) {
         int count = Serial1.readBytes(buffer, min(available, (int)sizeof(buffer)));
         for (int i = 0; i < count; i++) { processCrsfByte(buffer[i]); }
         Serial.write(buffer, count);
+        lastDataTime = now;
       }
       mutex_exit(&uartMutex);
     }
+
+    // Auto-exit passthrough if no data for 5 seconds (safety)
+    if (now - lastDataTime > 5000 && lastDataTime != 0) {
+        currentMode = MODE_GAMEPAD;
+        serialEcho = false;
+        __dmb();
+    }
+
   } else {
-    // Mapping: 
-    // CH1-4: Sticks (X, Y, Yaw/RZ, Throttle/RY)
-    // CH5-6: Aux Axes (Z, RX)
-    // CH7-16: Aux Channels (Buttons)
-    
+    // Mapping Logic
     gpReport.x  = mapAxis(localChannels[0]);
     gpReport.y  = mapAxis(localChannels[1]);
     gpReport.z  = mapAxis(localChannels[4]);
     gpReport.rz = mapAxis(localChannels[5]);
     gpReport.rx = mapAxis(localChannels[3]);
     gpReport.ry = mapThrottle(localChannels[2]);
-    gpReport.hat = 8; // Centered hat
-    gpReport.buttons = 0; // Reset buttons before setting
+    gpReport.hat = 8; 
+    gpReport.buttons = 0;
 
-    // Map channels 7 to 16 as buttons 1 to 10
     for (int i = 0; i < 10; i++) {
       if (localChannels[6 + i] > 1500) {
         gpReport.buttons |= (1UL << i);

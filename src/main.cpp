@@ -28,7 +28,7 @@ mutex_t uartMutex;
 enum DeviceMode { MODE_GAMEPAD, MODE_PASSTHROUGH };
 volatile DeviceMode currentMode = MODE_GAMEPAD;
 
-static char serialInBuff[64];
+static char serialInBuff[128];
 static uint8_t serialInBuffLen = 0;
 static bool serialEcho = false;
 
@@ -382,7 +382,6 @@ void loop() {
       }
       if ((available = Serial1.available()) > 0) {
         int count = Serial1.readBytes(buffer, min(available, (int)sizeof(buffer)));
-        for (int i = 0; i < count; i++) { processCrsfByte(buffer[i]); }
         Serial.write(buffer, count);
         lastDataTime = now;
       }

@@ -2,6 +2,7 @@
 #include <Adafruit_TinyUSB.h>
 #include <Adafruit_NeoPixel.h>
 #include <pico/mutex.h>
+#include <hardware/watchdog.h>
 
 // ==================== PINS & CONSTANTS ====================
 #define CRSF_RX_PIN     1
@@ -248,8 +249,13 @@ bool handleSerialCommand(char *cmd) {
     }
     else if (strcmp(cmd, "reboot") == 0 || strcmp(cmd, "exit") == 0 || strcmp(cmd, "save") == 0) {
         Serial.println("Rebooting...");
-        delay(200);
+        Serial.flush();
+        delay(250);
         rp2040.reboot();
+        // Fallback for some core versions
+        watchdog_reboot(0, 0, 0); 
+        while(1); 
+        return true; 
     }
     else if (strncmp(cmd, "serialpassthrough", 17) == 0) {
         uint32_t baud = 420000;

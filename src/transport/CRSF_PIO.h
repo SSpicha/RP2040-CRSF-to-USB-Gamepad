@@ -23,6 +23,7 @@ static const struct pio_program crsf_uart_rx_program = {
 class CRSFTransport {
 public:
     static const int BUFFER_SIZE = 256;
+    static const uint32_t DMA_INIT_COUNT = 0xF0000000; // Use large multiple of 256
     
     void begin(uint32_t pin, uint32_t baud) {
         _pin = pin;
@@ -30,13 +31,15 @@ public:
         _sm = pio_claim_unused_sm(_pio, true);
         uint offset = pio_add_program(_pio, &crsf_uart_rx_program);
 
+        pio_gpio_init(_pio, pin); // Correct GPIO init
+        
         pio_sm_config c = pio_get_default_sm_config();
         sm_config_set_in_pins(&c, pin);
         sm_config_set_jmp_pin(&c, pin);
         sm_config_set_in_shift(&c, true, false, 0);
         sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
         
-        float div = (float)clock_get_hz(clk_sys) / (8 * baud);
+        float div = (float)clock_get_hz(clk_sys) / (8.0f * (float)baud);
         sm_config_set_clkdiv(&c, div);
         
         pio_sm_init(_pio, _sm, offset, &c);
@@ -49,22 +52,20 @@ public:
         channel_config_set_read_increment(&dc, false);
         channel_config_set_write_increment(&dc, true);
         channel_config_set_dreq(&dc, pio_get_dreq(_pio, _sm, false));
-        channel_config_set_ring(&dc, true, 8); // 256 byte ring buffer (2^8)
+        channel_config_set_ring(&dc, true, 8); // 256 byte ring buffer
 
         dma_channel_configure(
             _dma_chan, &dc,
             _rx_buffer,     // Dest
             &_pio->rxf[_sm], // Source
-            0xFFFFFFFF,     // Count
+            DMA_INIT_COUNT, // Large predictable count
             true            // Start
         );
     }
 
     uint32_t available() {
-        uint32_t write_ptr = (uint32_t)_rx_buffer + (BUFFER_SIZE - dma_channel_hw_addr(_dma_chan)->transfer_count % BUFFER_SIZE);
-        // Simplified pointer logic for ring buffer
-        uint32_t curr_pos = BUFFER_SIZE - (dma_hw->ch[_dma_chan].transfer_count % BUFFER_SIZE);
-        if (curr_pos == BUFFER_SIZE) curr_pos = 0;
+        uint32_t remaining = dma_hw->ch[_dma_chan].transfer_count;
+        uint32_t curr_pos = (DMA_INIT_COUNT - remaining) % BUFFER_SIZE;
         
         if (curr_pos >= _read_ptr) return curr_pos - _read_ptr;
         return (BUFFER_SIZE - _read_ptr) + curr_pos;

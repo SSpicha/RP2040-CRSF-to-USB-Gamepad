@@ -136,7 +136,7 @@ void handleCLI() {
                 bool changed = false;
                 
                 if (inputBuff == "version") {
-                    Serial.println("Betaflight / RP2040-CRSF-Bridge 4.0.0");
+                    Serial.println("RP2040-CRSF-Bridge 4.0.1-fixed");
                 } else if (inputBuff == "status") {
                     Serial.printf("Link: %s, Rate: %lu Hz, Smoothing: %s, Cutoff: %.1f Hz\n", 
                         sharedData.link ? "YES" : "NO",
@@ -163,7 +163,6 @@ void handleCLI() {
                     int lastSpace = inputBuff.lastIndexOf(' ');
                     if (lastSpace > 17) baud = inputBuff.substring(lastSpace).toInt();
                     
-                    Serial1.end();
                     Serial1.setRX(CRSF_RX_PIN);
                     Serial1.setTX(CRSF_TX_PIN);
                     Serial1.begin(baud);
@@ -178,9 +177,6 @@ void handleCLI() {
                     Serial.println("Rebooting to Bootloader (USB Mass Storage)...");
                     delay(500);
                     reset_usb_boot(0, 0);
-                } else if (inputBuff.startsWith("get ")) {
-                    if (inputBuff.contains("serialrx_provider")) Serial.println("serialrx_provider = CRSF");
-                    else Serial.println("OK");
                 }
 
                 if (changed) {
@@ -209,15 +205,15 @@ void setup() {
 
     transport.begin(CRSF_RX_PIN, CRSF_BAUD);
     
-    Serial1.setRX(CRSF_RX_PIN);
-    Serial1.setTX(CRSF_TX_PIN);
-    Serial1.begin(CRSF_BAUD);
-    
+    // Serial1 is NOT started here to avoid GPIO conflict with PIO
     Serial.begin(115200);
 }
 
 void loop() {
+    static uint32_t lastLoopTime = 0;
     uint32_t now = millis();
+    float dt = (now - lastLoopTime) / 1000.0f;
+    lastLoopTime = now;
 
     // Hz calculation every 1 second
     static uint32_t lastHzCalc = 0;
@@ -258,12 +254,15 @@ void loop() {
     mutex_enter_blocking(&dataMutex);
     memcpy(ch, sharedData.channels, sizeof(ch));
     lastTime = sharedData.lastPacketTime;
+    
+    // Failsafe & link status update
+    if (now - lastTime > FAILSAFE_MS) {
+        sharedData.link = false;
+    }
     link = sharedData.link;
     mutex_exit(&dataMutex);
 
-    bool active = (link && (now - lastTime < FAILSAFE_MS));
-
-    if (!active) {
+    if (!link) {
         pixel.setPixelColor(0, (now / 500 % 2) ? pixel.Color(255, 0, 0) : 0);
         pixel.show();
     } else {
@@ -272,12 +271,12 @@ void loop() {
         pixel.show();
 
         static GamepadReport report;
-        report.x  = processor.processAxis(ch[0], 0);
-        report.y  = processor.processAxis(ch[1], 1);
+        report.x  = processor.processAxis(ch[0], 0, dt);
+        report.y  = processor.processAxis(ch[1], 1, dt);
         report.ry = processor.processThrottle(ch[2]);
-        report.rx = processor.processAxis(ch[3], 3);
-        report.z  = processor.processAxis(ch[4], 4);
-        report.rz = processor.processAxis(ch[5], 5);
+        report.rx = processor.processAxis(ch[3], 3, dt);
+        report.z  = processor.processAxis(ch[4], 4, dt);
+        report.rz = processor.processAxis(ch[5], 5, dt);
         
         report.buttons = 0;
         for (int i = 0; i < 10; i++) {

@@ -15,7 +15,7 @@
 #define CRSF_BAUD       420000
 #define LED_PIN         16
 #define FAILSAFE_MS     500
-#define EEPROM_MAGIC    0x43525346 // 'CRSF' magic constant
+#define EEPROM_MAGIC    0x43525346
 
 // ==================== GLOBALS ====================
 enum DeviceMode { MODE_GAMEPAD, MODE_PASSTHROUGH };
@@ -47,11 +47,9 @@ Adafruit_NeoPixel pixel(1, LED_PIN, NEO_GRB + NEO_KHZ800);
 void loadConfig() {
     EEPROM.begin(512);
     EEPROM.get(0, storage);
-    
     if (storage.magic == EEPROM_MAGIC) {
         rcConfig = storage.cfg;
     } else {
-        // Factory Defaults
         rcConfig.smoothingEnabled = false;
         rcConfig.smoothingCutoff = 50.0f;
         rcConfig.deadband = 4;
@@ -66,10 +64,10 @@ void saveConfig() {
     EEPROM.commit();
 }
 
-// ==================== HID DESCRIPTOR ====================
+// ==================== HID DESCRIPTOR (Simplified) ====================
 uint8_t const desc_hid_report[] = {
     HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP ),
-    HID_USAGE ( HID_USAGE_DESKTOP_GAMEPAD ),
+    HID_USAGE ( HID_USAGE_DESKTOP_JOYSTICK ),
     HID_COLLECTION ( HID_COLLECTION_APPLICATION ),
         HID_REPORT_ID(1)
         HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP ),
@@ -84,12 +82,13 @@ uint8_t const desc_hid_report[] = {
         HID_REPORT_COUNT ( 6 ),
         HID_REPORT_SIZE ( 16 ),
         HID_INPUT ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ),
+        
         HID_USAGE_PAGE ( HID_USAGE_PAGE_BUTTON ),
         HID_USAGE_MIN ( 1 ),
-        HID_USAGE_MAX ( 32 ),
+        HID_USAGE_MAX ( 16 ),
         HID_LOGICAL_MIN ( 0 ),
         HID_LOGICAL_MAX ( 1 ),
-        HID_REPORT_COUNT ( 32 ),
+        HID_REPORT_COUNT ( 16 ),
         HID_REPORT_SIZE ( 1 ),
         HID_INPUT ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ),
     HID_COLLECTION_END
@@ -97,21 +96,16 @@ uint8_t const desc_hid_report[] = {
 
 typedef struct __attribute__((packed)) {
     int16_t x, y, z, rz, rx, ry;
-    uint32_t buttons;
+    uint16_t buttons;
 } GamepadReport;
 
-// ==================== CORE 1: RECEIVER & PARSER ====================
-void setup1() {
-    delay(500);
-}
-
+// ==================== CORE 1: RECEIVER ====================
+void setup1() { delay(100); }
 void loop1() {
     static CRSFParser::Frame frame;
-    
     if (currentMode == MODE_GAMEPAD) {
         while (transport.available()) {
-            uint8_t b = transport.read();
-            if (parser.processByte(b, frame)) {
+            if (parser.processByte(transport.read(), frame)) {
                 mutex_enter_blocking(&dataMutex);
                 memcpy(sharedData.channels, frame.channels, sizeof(frame.channels));
                 sharedData.lastPacketTime = millis();
@@ -120,8 +114,6 @@ void loop1() {
                 mutex_exit(&dataMutex);
             }
         }
-    } else {
-        delay(10); // Low power mode in passthrough
     }
 }
 
@@ -133,70 +125,23 @@ void handleCLI() {
         if (c == '\n' || c == '\r') {
             inputBuff.trim();
             if (inputBuff.length() > 0) {
-                bool changed = false;
-                
-                if (inputBuff == "version") {
-                    Serial.println("RP2040-CRSF-Bridge 4.0.1-fixed");
-                } else if (inputBuff == "status") {
-                    Serial.printf("Link: %s, Rate: %lu Hz, Smoothing: %s, Cutoff: %.1f Hz\n", 
-                        sharedData.link ? "YES" : "NO",
-                        sharedData.hz,
-                        rcConfig.smoothingEnabled ? "ON" : "OFF",
-                        rcConfig.smoothingCutoff);
-                } else if (inputBuff == "set smoothing on") {
-                    rcConfig.smoothingEnabled = true;
-                    changed = true;
-                    Serial.println("Smoothing: ON");
-                } else if (inputBuff == "set smoothing off") {
-                    rcConfig.smoothingEnabled = false;
-                    changed = true;
-                    Serial.println("Smoothing: OFF");
-                } else if (inputBuff.startsWith("set cutoff ")) {
-                    float cutoff = inputBuff.substring(11).toFloat();
-                    if (cutoff > 0) {
-                        rcConfig.smoothingCutoff = cutoff;
-                        changed = true;
-                        Serial.printf("Cutoff: %.1f Hz\n", cutoff);
-                    }
-                } else if (inputBuff.startsWith("serialpassthrough")) {
-                    uint32_t baud = 420000;
-                    int lastSpace = inputBuff.lastIndexOf(' ');
-                    if (lastSpace > 17) baud = inputBuff.substring(lastSpace).toInt();
-                    
-                    Serial1.setRX(CRSF_RX_PIN);
-                    Serial1.setTX(CRSF_TX_PIN);
-                    Serial1.begin(baud);
-                    
-                    currentMode = MODE_PASSTHROUGH;
-                    Serial.println("Entering Passthrough mode...");
-                } else if (inputBuff == "reboot" || inputBuff == "exit") {
-                    Serial.println("Rebooting...");
-                    delay(200);
-                    rp2040.reboot();
-                } else if (inputBuff == "dfu" || inputBuff == "bootloader") {
-                    Serial.println("Rebooting to Bootloader (USB Mass Storage)...");
-                    delay(500);
-                    reset_usb_boot(0, 0);
+                if (inputBuff == "version") Serial.println("RP2040-CRSF-Bridge 4.0.2");
+                else if (inputBuff == "status") {
+                    Serial.printf("Link: %s, Rate: %lu Hz, Smoothing: %s\n", 
+                        sharedData.link ? "YES" : "NO", sharedData.hz, rcConfig.smoothingEnabled ? "ON" : "OFF");
                 }
-
-                if (changed) {
-                    processor.setConfig(rcConfig);
-                    saveConfig();
-                }
+                else if (inputBuff == "reboot") rp2040.reboot();
+                else if (inputBuff == "dfu") reset_usb_boot(0, 0);
             }
             inputBuff = "";
             Serial.print("# ");
-        } else {
-            inputBuff += c;
-        }
+        } else inputBuff += c;
     }
 }
 
 void setup() {
     mutex_init(&dataMutex);
     pixel.begin();
-    pixel.setBrightness(40);
-
     loadConfig();
 
     usb_hid.setPollInterval(1);
@@ -204,18 +149,16 @@ void setup() {
     usb_hid.begin();
 
     transport.begin(CRSF_RX_PIN, CRSF_BAUD);
-    
-    // Serial1 is NOT started here to avoid GPIO conflict with PIO
     Serial.begin(115200);
 }
 
 void loop() {
-    static uint32_t lastLoopTime = 0;
-    uint32_t now = millis();
-    float dt = (now - lastLoopTime) / 1000.0f;
-    lastLoopTime = now;
+    static uint32_t lastLoopMicros = 0;
+    uint32_t nowMicros = micros();
+    float dt = (lastLoopMicros == 0) ? 0.001f : (nowMicros - lastLoopMicros) / 1000000.0f;
+    lastLoopMicros = nowMicros;
 
-    // Hz calculation every 1 second
+    uint32_t now = millis();
     static uint32_t lastHzCalc = 0;
     if (now - lastHzCalc >= 1000) {
         mutex_enter_blocking(&dataMutex);
@@ -225,49 +168,22 @@ void loop() {
         lastHzCalc = now;
     }
 
-    if (currentMode == MODE_PASSTHROUGH) {
-        static uint32_t lastData = 0;
-        pixel.setPixelColor(0, (now / 150 % 2) ? pixel.Color(255, 100, 0) : 0);
-        pixel.show();
-
-        while (Serial.available()) {
-            Serial1.write(Serial.read());
-            lastData = now;
-        }
-        while (Serial1.available()) {
-            Serial.write(Serial1.read());
-            lastData = now;
-        }
-
-        if (now - lastData > 5000 && lastData != 0) {
-            rp2040.reboot();
-        }
-        return;
-    }
-
     handleCLI();
-    
+
     uint16_t ch[16];
     uint32_t lastTime;
-    bool link;
-
     mutex_enter_blocking(&dataMutex);
     memcpy(ch, sharedData.channels, sizeof(ch));
     lastTime = sharedData.lastPacketTime;
-    
-    // Failsafe & link status update
-    if (now - lastTime > FAILSAFE_MS) {
-        sharedData.link = false;
-    }
-    link = sharedData.link;
+    if (now - lastTime > FAILSAFE_MS) sharedData.link = false;
+    bool link = sharedData.link;
     mutex_exit(&dataMutex);
 
     if (!link) {
-        pixel.setPixelColor(0, (now / 500 % 2) ? pixel.Color(255, 0, 0) : 0);
+        pixel.setPixelColor(0, (now / 200 % 2) ? pixel.Color(255, 0, 0) : 0);
         pixel.show();
     } else {
-        if (rcConfig.smoothingEnabled) pixel.setPixelColor(0, pixel.Color(0, 255, 255));
-        else pixel.setPixelColor(0, pixel.Color(0, 255, 0));
+        pixel.setPixelColor(0, rcConfig.smoothingEnabled ? pixel.Color(0, 255, 255) : pixel.Color(0, 255, 0));
         pixel.show();
 
         static GamepadReport report;
@@ -280,11 +196,9 @@ void loop() {
         
         report.buttons = 0;
         for (int i = 0; i < 10; i++) {
-            if (ch[6 + i] > 1500) report.buttons |= (1UL << i);
+            if (ch[6 + i] > 1500) report.buttons |= (1 << i);
         }
 
-        if (usb_hid.ready()) {
-            usb_hid.sendReport(1, &report, sizeof(report));
-        }
+        if (usb_hid.ready()) usb_hid.sendReport(1, &report, sizeof(report));
     }
 }

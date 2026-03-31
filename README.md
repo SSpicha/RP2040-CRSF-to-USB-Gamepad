@@ -71,4 +71,11 @@ This version (v4.0) introduces a high-fidelity **Betaflight CLI Emulation**, all
 3.  Build & Upload to your RP2040 board.
 
 ---
+
+## 🔧 3D printed parts
+
+[Thingiverse](https://www.thingiverse.com/thing:7326230)
+[Printables](https://www.printables.com/model/1657670-rp2040-crsf-to-usb-gamepad)
+
+---
 **Developed by [SSpicha](https://github.com/SSpicha)**

@@ -35,6 +35,23 @@ Connect to the device via any Serial Terminal (Baud: 115200) and use the followi
 - `dfu` or `bootloader` — Reboot the device into USB Mass Storage mode for firmware updates.
 - `reboot` — Reboot the device.
 
+### Companion App Protocol (NDJSON over CDC Serial)
+
+The firmware now exposes a machine-readable `app` namespace for companion tools:
+
+- `app ping`
+- `app get proto`
+- `app get status`
+- `app get channels`
+- `app get map`
+- `app set axis <axis_idx> <channel>`
+- `app set button <button_idx> <channel> <threshold>`
+- `app set defaults`
+- `app sub telemetry <interval_ms>`
+- `app unsub`
+
+All `app` responses are JSON lines (one JSON object per line), allowing easy parsing in local companion applications.
+
 ## 📡 Flashing the Receiver
 
 The device fully supports **Serial Passthrough** mode.
@@ -57,3 +74,26 @@ Developed using **PlatformIO**.
 - Platform: `Raspberry Pi Pico`
 - Framework: `Arduino`
 - Libraries: `Adafruit TinyUSB`, `Adafruit NeoPixel`
+
+## Local Web Companion (MVP)
+
+A local companion app skeleton is available in `companion-web`:
+
+### One-click launch on Windows
+
+Use `start-companion.bat` from the project root. It will:
+- verify `npm` is installed;
+- install dependencies on first run;
+- open `http://127.0.0.1:5173`;
+- start the companion dev server.
+
+1. `cd companion-web`
+2. `npm install`
+3. `npm run dev`
+4. Open `http://127.0.0.1:5173` in Chrome or Edge.
+5. Click **Connect** and choose the RP2040 serial port.
+
+Features in MVP:
+- live channel view
+- axis/button remapping editor
+- telemetry dashboard (uptime, link quality proxy, packet rate, processing timings, resource proxies)

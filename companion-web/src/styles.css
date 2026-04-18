@@ -1,0 +1,212 @@
+* {
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #101318;
+  color: #ecf1ff;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+}
+
+.badgeDemo {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ff9f1c;
+  color: #1b1300;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.statusBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+}
+
+.pillOk {
+  background: rgba(50, 184, 109, 0.18);
+  border-color: rgba(50, 184, 109, 0.4);
+  color: #7ee3a8;
+}
+
+.pillWarn {
+  background: rgba(255, 159, 28, 0.18);
+  border-color: rgba(255, 159, 28, 0.4);
+  color: #ffd08f;
+}
+
+.pillDanger {
+  background: rgba(238, 85, 85, 0.18);
+  border-color: rgba(238, 85, 85, 0.4);
+  color: #ffabab;
+}
+
+.pillMuted {
+  background: rgba(168, 184, 211, 0.12);
+  border-color: rgba(168, 184, 211, 0.28);
+  color: #d6deef;
+}
+
+.card {
+  border: 1px solid #2f3848;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #161c26;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+button {
+  background: #2e6ae6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  border: 1px solid #2f3848;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #121924;
+}
+
+.metricLabel {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.metricValue {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.metricCard.ok {
+  border-color: rgba(50, 184, 109, 0.55);
+}
+
+.metricCard.warn {
+  border-color: rgba(255, 159, 28, 0.55);
+}
+
+.metricCard.danger {
+  border-color: rgba(238, 85, 85, 0.55);
+}
+
+.metricCard.neutral {
+  border-color: #2f3848;
+}
+
+.channels {
+  display: grid;
+  gap: 6px;
+}
+
+.channelLine {
+  display: grid;
+  grid-template-columns: 50px 1fr 60px;
+  gap: 8px;
+  align-items: center;
+}
+
+.mappingCols {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 36px 90px 90px;
+  gap: 6px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+
+.buttonsTable {
+  max-height: 280px;
+  overflow: auto;
+}
+
+input {
+  width: 100%;
+  padding: 4px 6px;
+}
+
+pre {
+  background: #0f131a;
+  border: 1px solid #293142;
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.warn {
+  color: #ffd18a;
+}
+
+.logsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.9;
+}

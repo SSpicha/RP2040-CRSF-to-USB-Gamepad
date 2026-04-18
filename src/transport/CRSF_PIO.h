@@ -23,6 +23,11 @@ static const struct pio_program crsf_uart_rx_program = {
 class CRSFTransport {
 public:
     static const int BUFFER_SIZE = 256;
+
+    struct Stats {
+        uint32_t overflowCount = 0;
+        uint32_t maxBufferedBytes = 0;
+    };
     
     void begin(uint32_t pin, uint32_t baud) {
         _pin = pin;
@@ -61,19 +66,32 @@ public:
     }
 
     uint32_t available() {
-        uint32_t write_ptr = (uint32_t)_rx_buffer + (BUFFER_SIZE - dma_channel_hw_addr(_dma_chan)->transfer_count % BUFFER_SIZE);
-        // Simplified pointer logic for ring buffer
         uint32_t curr_pos = BUFFER_SIZE - (dma_hw->ch[_dma_chan].transfer_count % BUFFER_SIZE);
         if (curr_pos == BUFFER_SIZE) curr_pos = 0;
-        
-        if (curr_pos >= _read_ptr) return curr_pos - _read_ptr;
-        return (BUFFER_SIZE - _read_ptr) + curr_pos;
+
+        uint32_t buffered = 0;
+        if (curr_pos >= _read_ptr) buffered = curr_pos - _read_ptr;
+        else buffered = (BUFFER_SIZE - _read_ptr) + curr_pos;
+
+        if (buffered >= BUFFER_SIZE - 1) {
+            _stats.overflowCount++;
+            _read_ptr = (_read_ptr + 1) % BUFFER_SIZE;
+            buffered--;
+        }
+        if (buffered > _stats.maxBufferedBytes) {
+            _stats.maxBufferedBytes = buffered;
+        }
+        return buffered;
     }
 
     uint8_t read() {
         uint8_t b = _rx_buffer[_read_ptr];
         _read_ptr = (_read_ptr + 1) % BUFFER_SIZE;
         return b;
+    }
+
+    Stats getStats() const {
+        return _stats;
     }
 
 private:
@@ -83,4 +101,5 @@ private:
     int _dma_chan;
     uint8_t _rx_buffer[256] __attribute__((aligned(256)));
     uint32_t _read_ptr = 0;
+    Stats _stats;
 };

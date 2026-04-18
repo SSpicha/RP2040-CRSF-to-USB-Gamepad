@@ -6,11 +6,26 @@ class CRSFParser {
 public:
     static const uint8_t CRSF_ADDR_RADIO = 0xC8;
     static const uint8_t CRSF_TYPE_RC_CHANNELS = 0x16;
+    static const uint8_t CRSF_TYPE_LINK_STATISTICS = 0x14;
 
     typedef struct {
         uint16_t channels[16];
         uint32_t timestamp;
     } Frame;
+
+    typedef struct {
+        uint8_t uplinkRssi1;
+        uint8_t uplinkRssi2;
+        uint8_t uplinkLq;
+        int8_t uplinkSnr;
+        uint8_t activeAntenna;
+        uint8_t rfMode;
+        uint8_t uplinkTxPower;
+        uint8_t downlinkRssi;
+        uint8_t downlinkLq;
+        int8_t downlinkSnr;
+        uint32_t timestamp;
+    } LinkStats;
 
     bool processByte(uint8_t b, Frame &outFrame) {
         _buffer[_pos++] = b;
@@ -43,6 +58,8 @@ public:
                             outFrame.timestamp = micros();
                             _reset();
                             return true;
+                        } else if (_buffer[2] == CRSF_TYPE_LINK_STATISTICS) {
+                            _decodeLinkStats(_buffer + 3, _len - 2);
                         }
                     }
                     _reset();
@@ -54,12 +71,25 @@ public:
         return false;
     }
 
+    bool getLatestLinkStats(LinkStats &outStats) const {
+        if (!_hasLinkStats) return false;
+        outStats = _latestLinkStats;
+        return true;
+    }
+
+    uint32_t getLinkStatsSequence() const {
+        return _linkStatsSequence;
+    }
+
 private:
     enum State { WAIT_ADDR, WAIT_LEN, WAIT_PAYLOAD };
     State _state = WAIT_ADDR;
     uint8_t _buffer[64];
     uint8_t _pos = 0;
     uint8_t _len = 0;
+    bool _hasLinkStats = false;
+    uint32_t _linkStatsSequence = 0;
+    LinkStats _latestLinkStats = {};
 
     void _reset() {
         _state = WAIT_ADDR;
@@ -83,6 +113,23 @@ private:
         channels[13] = ((p[17] >> 7 | p[18] << 1 | p[19] << 9) & 0x07FF);
         channels[14] = ((p[19] >> 2 | p[20] << 6) & 0x07FF);
         channels[15] = ((p[20] >> 5 | p[21] << 3) & 0x07FF);
+    }
+
+    void _decodeLinkStats(const uint8_t *p, uint8_t payloadLen) {
+        if (payloadLen < 10) return;
+        _latestLinkStats.uplinkRssi1 = p[0];
+        _latestLinkStats.uplinkRssi2 = p[1];
+        _latestLinkStats.uplinkLq = p[2];
+        _latestLinkStats.uplinkSnr = (int8_t)p[3];
+        _latestLinkStats.activeAntenna = p[4];
+        _latestLinkStats.rfMode = p[5];
+        _latestLinkStats.uplinkTxPower = p[6];
+        _latestLinkStats.downlinkRssi = p[7];
+        _latestLinkStats.downlinkLq = p[8];
+        _latestLinkStats.downlinkSnr = (int8_t)p[9];
+        _latestLinkStats.timestamp = micros();
+        _hasLinkStats = true;
+        _linkStatsSequence++;
     }
 
     uint8_t _crsfCrc8(const uint8_t *data, uint8_t len) {

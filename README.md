@@ -1,27 +1,27 @@
 # RP2040 CRSF to USB Gamepad
 
-Компактний та швидкий міст для перетворення сигналу **CRSF (ExpressLRS/Crossfire)** у стандартний **USB HID Gamepad**.
+A high-performance bridge converting **CRSF (ExpressLRS/Crossfire)** signals into a standard **USB HID Gamepad**.
 
-## Ключові можливості
-*   **Низька затримка**: Високопродуктивна обробка сигналу на базі RP2040.
-*   **WEB-компаньйон**: Повноцінний інтерфейс для налаштування мапінгу осей та кнопок без необхідності перепрошивки пристрою.
-*   **Динамічне калібрування**: Гнучка можливість задати ліміти (Min/Max) для кожної осі (стіки, тригери) безпосередньо через браузер для забезпечення ідеальної точності.
-*   **Висока стабільність**: Оптимізований протокол телеметрії (стиснений JSON) для роботи без зависань та розривів зв'язку.
-*   **Візуалізація в реальному часі**: Схематичний геймпад у браузері для перевірки всіх каналів, стану кнопок та ходу тригерів (LT/RT).
+## Key Features
+*   **Low Latency**: Optimized signal processing on RP2040.
+*   **Web Companion**: Full-featured web interface for mapping axes and buttons without reflashing the firmware.
+*   **Dynamic Calibration**: Flexible Min/Max limit settings for each axis (sticks, triggers) directly from the browser for perfect precision.
+*   **High Stability**: Optimized telemetry protocol (compressed JSON) ensures reliable operation without disconnects.
+*   **Real-time Visualization**: Schematic gamepad in the browser to monitor all channels, button states, and trigger (LT/RT) travel.
 
-## Початок роботи
-1. **Прошивка**: Завантажте `firmware.uf2` на ваш пристрій (RP2040) у режимі завантажувача (Bootloader).
-2. **Підключення**: Відкрийте `companion-app.html` у браузері з підтримкою Web Serial API (Chrome, Edge).
-3. **Налаштування**:
-    - Натисніть **Connect** та виберіть пристрій.
-    - Використовуйте таблицю **Axes Mapping** для призначення каналів.
-    - Для калібрування тригерів (LT/RT): встановіть стік у крайнє положення та натисніть кнопку **M (Min)** або **X (Max)**, після чого натисніть **Apply mapping** для збереження в пам'ять пристрою.
+## Getting Started
+1. **Flashing**: Flash `firmware.uf2` to your RP2040 device using the bootloader mode.
+2. **Connecting**: Open `companion-app.html` in a Web Serial API compatible browser (Chrome, Edge).
+3. **Configuration**:
+    - Click **Connect** and select your device.
+    - Use the **Axes Mapping** table to assign channels.
+    - **Calibration (LT/RT)**: Move your stick/trigger to the desired minimum/maximum position and click the **M (Min)** or **X (Max)** buttons to capture values. Click **Apply mapping** to save settings to device memory.
 
-## Технічні деталі
-*   **Протокол**: CRSF.
-*   **HID**: Стандартний геймпад (6 осей, 32 кнопки).
-*   **Baud Rate**: 230400 для стабільної роботи телеметрії.
-*   **EEPROM**: Автоматичне збереження налаштувань.
+## Technical Details
+*   **Protocol**: CRSF.
+*   **HID**: Standard Gamepad (6 axes, 32 buttons).
+*   **Baud Rate**: 230400 for stable telemetry performance.
+*   **EEPROM**: Automatic configuration persistence.
 
 ---
-*Проект створено для зручного використання пультів дистанційного керування у симуляторах та іграх.*
+*Created for using RC transmitters in simulators and games.*

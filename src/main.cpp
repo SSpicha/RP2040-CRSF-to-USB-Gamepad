@@ -389,7 +389,7 @@ void handleCLI() {
                     delay(500);
                     reset_usb_boot(0, 0);
                 } else if (inputBuff.startsWith("get ")) {
-                    if (inputBuff.contains("serialrx_provider")) Serial.println("serialrx_provider = CRSF");
+                    if (inputBuff.indexOf("serialrx_provider") >= 0) Serial.println("serialrx_provider = CRSF");
                     else Serial.println("OK");
                 } else if (inputBuff == "app ping") {
                     Serial.println("{\"type\":\"pong\"}");

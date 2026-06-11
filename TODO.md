@@ -6,8 +6,16 @@
 - [ ] Reduce 1-minute web app freeze risk (serial read loop / frame timeout / decode robustness).
 - [ ] Document how to reproduce freeze reports and expected logs.
 
-## Follow-ups
-- [ ] Batch command `app set map <json>`.
-- [ ] Review blocking mutex path on Core 0/Core 1 and evaluate spin_lock/double-buffer tradeoffs.
+## In progress
+- [ ] Core0/Core1 snapshot sync validation: fixed `snapshotSharedDataCopyFrom()` read sequencer; bounded retry against in-flight writes and preserved generator monotonicity. Build verified on `yd_rp2040`.
+- [ ] CLI build safety fix in `handleCLI()`: replaced `String::contains()` with `String::indexOf() >= 0`.
+
+## Up next
+- [ ] Review Core0/Core1 blocking path and choose spin_lock vs optional double-buffer tradeoff.
+- [ ] Add parser/transport unit tests with focus on serial snapshot concurrency cases.
 - [ ] Add CI builds for firmware + companion-web.
-- [ ] Add parser/transport unit tests.
+
+## Backlog / Improvements
+- [ ] Batch command `app set map <json>`.
+- [ ] ArduinoJson integration in companion-web.
+- [ ] Integration tests for Web Serial flow.

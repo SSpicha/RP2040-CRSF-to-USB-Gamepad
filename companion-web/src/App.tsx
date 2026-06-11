@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SerialService, type IncomingMessage } from "./serialService";
-import type { DeviceStatus, MapPayload } from "./types";
+import type { DeviceStatus, MapPayload, AxisMapping } from "./types";
 
 const AXIS_NAMES = ["X", "Y", "Z", "RZ", "RX", "RY"] as const;
 
@@ -19,7 +19,14 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<DeviceStatus | null>(null);
   const [channels, setChannels] = useState<number[]>(new Array(16).fill(992));
-  const [axisMap, setAxisMap] = useState<number[]>([0, 1, 4, 5, 3, 2]);
+  const [axisMap, setAxisMap] = useState<AxisMapping[]>([
+    { ch: 0 },
+    { ch: 1 },
+    { ch: 4 },
+    { ch: 5 },
+    { ch: 3 },
+    { ch: 2 }
+  ]);
   const [buttonMap, setButtonMap] = useState<Array<{ idx: number; ch: number; th: number }>>(
     Array.from({ length: 16 }, (_, i) => ({ idx: i, ch: 6 + (i % 10), th: 1500 }))
   );
@@ -101,7 +108,7 @@ export function App() {
   const applyMap = async () => {
     try {
       for (let i = 0; i < axisMap.length; i++) {
-        await serialRef.current.send(`app set axis ${i} ${clamp(axisMap[i], 0, 15)}`);
+        await serialRef.current.send(`app set axis ${i} ${clamp(axisMap[i]?.ch ?? 0, 0, 15)}`);
       }
       for (const b of buttonMap) {
         await serialRef.current.send(
@@ -117,22 +124,25 @@ export function App() {
 
   const axisRows = useMemo(
     () =>
-      AXIS_NAMES.map((name, i) => (
-        <div className="row" key={name}>
-          <span>{name}</span>
-          <input
-            type="number"
-            min={0}
-            max={15}
-            value={axisMap[i] ?? 0}
-            onChange={(e) => {
-              const next = [...axisMap];
-              next[i] = Number(e.target.value);
-              setAxisMap(next);
-            }}
-          />
-        </div>
-      )),
+      AXIS_NAMES.map((name, i) => {
+        const mapping = axisMap[i] ?? { ch: 0 };
+        return (
+          <div className="row" key={name}>
+            <span>{name}</span>
+            <input
+              type="number"
+              min={0}
+              max={15}
+              value={mapping.ch}
+              onChange={(e) => {
+                const next = [...axisMap];
+                next[i] = { ch: Number(e.target.value) };
+                setAxisMap(next);
+              }}
+            />
+          </div>
+        );
+      }),
     [axisMap]
   );
 

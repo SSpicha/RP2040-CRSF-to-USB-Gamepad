@@ -1,7 +1,9 @@
 import React from 'react';
 
+import type { AxisMapping } from "./types";
+
 interface VisualizerProps {
-  axisMap: number[];
+  axisMap: AxisMapping[];
   channels: number[];
 }
 
@@ -11,7 +13,8 @@ export const GamepadVisualizer: React.FC<VisualizerProps> = ({ axisMap, channels
   return (
     <div className="gamepad-viz">
       {AXIS_NAMES.map((name, i) => {
-        const chIdx = axisMap[i];
+        const mapping = axisMap[i];
+        const chIdx = mapping?.ch ?? i;
         const val = channels[chIdx] ?? 992;
         const pct = ((val - 172) / (1811 - 172)) * 100;
         

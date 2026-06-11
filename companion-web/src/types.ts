@@ -1,5 +1,12 @@
 export type DeviceMode = "gamepad" | "passthrough";
 
+export interface AxisMapping {
+  ch: number;
+  min?: number;
+  max?: number;
+  invert?: boolean;
+}
+
 export interface ButtonMapping {
   idx: number;
   ch: number;
@@ -36,6 +43,6 @@ export interface DeviceStatus {
 
 export interface MapPayload {
   type: "map";
-  axes: number[];
+  axes: AxisMapping[];
   buttons: ButtonMapping[];
 }

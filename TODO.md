@@ -14,9 +14,9 @@
 - [x] PR preparation: decided to continue in `feature/companion-app-v2`; `main` has unrelated history and will stay separate for now.
 
 ## Up next
-- [ ] Review Core0/Core1 blocking path and choose spin_lock vs optional double-buffer tradeoff.
-- [ ] Add parser/transport unit tests with focus on serial snapshot concurrency cases.
-- [ ] Add CI builds for firmware + companion-web.
+- [x] Review Core0/Core1 blocking path and choose spin_lock vs optional double-buffer tradeoff. Decision: keep bounded mutex on Core0, skip double-buffer (low latency path ~2 µs CS, no over-engineering).
+- [x] Add parser/transport unit tests with focus on serial snapshot concurrency cases.
+- [x] Extend CI with companion-web build (Vite) in addition to firmware build.
 
 ## Backlog / Improvements
 - [ ] Batch command `app set map <json>`.

@@ -399,8 +399,6 @@ void handleCLI() {
         if (c == '\n' || c == '\r') {
             inputBuff.trim();
             if (inputBuff.length() > 0) {
-// ... (rest of method unchanged, but wait, I need to provide full content for replace)
-
                 bool changed = false;
                 
                 if (inputBuff == "version") {
@@ -554,10 +552,6 @@ void setup() {
     usb_hid.begin();
 
     transport.begin(CRSF_RX_PIN, CRSF_BAUD);
-    
-    Serial1.setRX(CRSF_RX_PIN);
-    Serial1.setTX(CRSF_TX_PIN);
-    Serial1.begin(CRSF_BAUD);
     
     Serial.begin(115200);
 }

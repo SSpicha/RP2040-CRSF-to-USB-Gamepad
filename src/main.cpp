@@ -63,6 +63,7 @@ struct RuntimeStats {
     uint32_t transportOverflow;
     uint32_t transportMaxBuffered;
     uint32_t memFree;
+    uint32_t mutexMissedReads;
     bool rfStatsValid;
     uint32_t linkStatsAgeMs;
     uint8_t rfRssiDbm;
@@ -470,6 +471,7 @@ void setup() {
     mutex_init(&dataMutex);
     pixel.begin();
     pixel.setBrightness(40);
+    runtimeStats.mutexMissedReads = 0;
 
     loadConfig();
 
@@ -539,16 +541,37 @@ void loop() {
     int8_t rfSnr;
     uint32_t lastLinkStatsTime;
 
-    mutex_enter_blocking(&dataMutex);
-    memcpy(ch, sharedData.channels, sizeof(ch));
-    lastTime = sharedData.lastPacketTime;
-    packetRateHz = sharedData.hz;
-    link = sharedData.link;
-    rfRssi = sharedData.uplinkRssiDbm;
-    rfLq = sharedData.uplinkLqPct;
-    rfSnr = sharedData.uplinkSnrDb;
-    lastLinkStatsTime = sharedData.lastLinkStatsTime;
-    mutex_exit(&dataMutex);
+    uint32_t readStart = millis();
+    bool gotMutex = false;
+    while (!gotMutex) {
+        if (mutex_try_enter(&dataMutex, NULL)) {
+            gotMutex = true;
+            break;
+        }
+        if (millis() - readStart > 2) {
+            runtimeStats.mutexMissedReads++;
+            link = false;
+            memset(ch, 0, sizeof(ch));
+            lastTime = now - FAILSAFE_MS - 1;
+            packetRateHz = 0;
+            rfRssi = 0;
+            rfLq = 0;
+            rfSnr = 0;
+            lastLinkStatsTime = 0;
+            break;
+        }
+    }
+    if (gotMutex) {
+        memcpy(ch, sharedData.channels, sizeof(ch));
+        lastTime = sharedData.lastPacketTime;
+        packetRateHz = sharedData.hz;
+        link = sharedData.link;
+        rfRssi = sharedData.uplinkRssiDbm;
+        rfLq = sharedData.uplinkLqPct;
+        rfSnr = sharedData.uplinkSnrDb;
+        lastLinkStatsTime = sharedData.lastLinkStatsTime;
+        mutex_exit(&dataMutex);
+    }
 
     bool active = (link && (now - lastTime < FAILSAFE_MS));
     runtimeStats.lastPacketAgeMs = active ? now - lastTime : FAILSAFE_MS + 1;

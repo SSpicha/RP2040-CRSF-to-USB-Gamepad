@@ -8,6 +8,7 @@
 
 ## In progress
 - [ ] Core0/Core1 snapshot sync validation: fixed `snapshotSharedDataCopyFrom()` read sequencer; bounded retry against in-flight writes and preserved generator monotonicity. Build verified on `yd_rp2040`.
+- [x] Core0/Core1 blocking path: replaced `mutex_enter_blocking` with `mutex_try_enter` + 2ms bounded wait on Core0; Core1 keeps blocking priority. Degraded mode produces safe zeros on timeout. Build verified.
 - [ ] CLI build safety fix in `handleCLI()`: replaced `String::contains()` with `String::indexOf() >= 0`.
 
 ## Up next

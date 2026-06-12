@@ -65,7 +65,12 @@ export function App() {
       await serialRef.current.connect(115200);
       setConnected(true);
       appendLog("Connected");
-      void serialRef.current.startReadLoop(onMessage);
+      const disconnectOnStale = async () => {
+        appendLog("No data received for 10s — disconnecting.");
+        await disconnect();
+        appendLog("Reconnect manually.");
+      };
+      void serialRef.current.startReadLoop(onMessage, disconnectOnStale);
       await serialRef.current.send("app get proto");
       await serialRef.current.send("app get map");
       await serialRef.current.send("app sub telemetry 100");

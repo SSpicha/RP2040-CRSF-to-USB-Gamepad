@@ -9,6 +9,49 @@ export class SerialService {
   private readLoopRunning = false;
   private decoder = new TextDecoder();
   private encoder = new TextEncoder();
+  private lastMessageTime = 0;
+  private watchdogTimer: number | null = null;
+  private readTimeoutMs = 5000;
+  private staleThresholdMs = 10000;
+
+  private async readWithTimeout(): Promise<any> {
+    if (!this.reader) throw new Error("Serial reader is not available.");
+    return Promise.race([
+      this.reader.read(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("read timeout")), this.readTimeoutMs)
+      )
+    ]);
+  }
+
+  private startWatchdog(onStale: () => void): void {
+    this.stopWatchdog();
+    this.lastMessageTime = Date.now();
+    this.watchdogTimer = window.setInterval(() => {
+      if (this.readLoopRunning && Date.now() - this.lastMessageTime > this.staleThresholdMs) {
+        onStale();
+      }
+    }, 1000);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer !== null) {
+      window.clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  setReadTimeout(ms: number): void {
+    this.readTimeoutMs = ms;
+  }
+
+  setStaleThreshold(ms: number): void {
+    this.staleThresholdMs = ms;
+  }
+
+  getLastMessageAgeMs(): number {
+    return Date.now() - this.lastMessageTime;
+  }
 
   async connect(baudRate = 115200): Promise<void> {
     if (!("serial" in navigator)) {
@@ -24,8 +67,9 @@ export class SerialService {
 
   async disconnect(): Promise<void> {
     this.readLoopRunning = false;
+    this.stopWatchdog();
     if (this.reader) {
-      await this.reader.cancel();
+      try { await this.reader.cancel(); } catch {}
       this.reader.releaseLock();
       this.reader = null;
     }
@@ -44,15 +88,29 @@ export class SerialService {
     await this.writer.write(this.encoder.encode(`${command}\n`));
   }
 
-  async startReadLoop(onMessage: (msg: IncomingMessage) => void): Promise<void> {
+  async startReadLoop(onMessage: (msg: IncomingMessage) => void, onStale?: () => void): Promise<void> {
     if (!this.reader) throw new Error("Serial reader is not available.");
     let buffer = "";
 
+    this.startWatchdog(onStale ?? (() => {}));
+
     while (this.readLoopRunning) {
-      const { value, done } = await this.reader.read();
-      if (done) break;
+      let value: Uint8Array | null = null;
+      try {
+        const result = await this.readWithTimeout();
+        const { value: readValue, done } = result;
+        if (done) break;
+        value = readValue ?? null;
+      } catch (err) {
+        if (!this.readLoopRunning) break;
+        console.warn("SerialService: read error", err);
+        onMessage({ type: "error", message: (err as Error).message });
+        continue;
+      }
+
       if (!value) continue;
       buffer += this.decoder.decode(value);
+      this.lastMessageTime = Date.now();
 
       let newlineIndex = buffer.indexOf("\n");
       while (newlineIndex >= 0) {
@@ -85,6 +143,8 @@ export class SerialService {
         newlineIndex = buffer.indexOf("\n");
       }
     }
+
+    this.stopWatchdog();
   }
 
   isConnected(): boolean {

@@ -19,6 +19,6 @@
 - [x] Extend CI with companion-web build (Vite) in addition to firmware build.
 
 ## Backlog / Improvements
-- [ ] Batch command `app set map <json>`.
-- [ ] ArduinoJson integration in companion-web.
-- [ ] Integration tests for Web Serial flow.
+- [x] Batch command `app set map <json>`.
+- [x] ArduinoJson integration in companion-web. Replaced with lightweight runtime validation in `serialService.ts`; no extra deps added.
+- [x] Integration tests for Web Serial flow.

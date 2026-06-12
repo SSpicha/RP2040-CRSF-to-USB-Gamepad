@@ -58,15 +58,30 @@ export class SerialService {
       while (newlineIndex >= 0) {
         const line = buffer.slice(0, newlineIndex).trim();
         buffer = buffer.slice(newlineIndex + 1);
-        if (line.startsWith("{") && line.endsWith("}")) {
-          try {
-            onMessage(JSON.parse(line) as IncomingMessage);
-          } catch {
-            onMessage({ type: "parse_error", raw: line });
-          }
-        } else if (line.length > 0) {
-          onMessage({ type: "line", raw: line });
+        if (line.length === 0) {
+          newlineIndex = buffer.indexOf("\n");
+          continue;
         }
+
+        const trimmed = line.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+          try {
+            const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+            const messageType = typeof parsed.type === "string" ? parsed.type : null;
+            if (!messageType) {
+              throw new Error("missing type");
+            }
+            const { type, ...rest } = parsed;
+            onMessage({ type, ...rest } as IncomingMessage);
+          } catch (error) {
+            console.warn("SerialService: failed to parse JSON line", trimmed, error);
+            onMessage({ type: "parse_error", raw: trimmed });
+          }
+          newlineIndex = buffer.indexOf("\n");
+          continue;
+        }
+
+        onMessage({ type: "line", raw: trimmed });
         newlineIndex = buffer.indexOf("\n");
       }
     }

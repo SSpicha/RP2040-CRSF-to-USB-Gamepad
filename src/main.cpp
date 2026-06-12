@@ -336,6 +336,61 @@ void loop1() {
     }
 }
 
+int readIntFromJson(const String& json, const String& key, int start, int& value, int& end) {
+    String keyQuoted = "\"" + key + "\"";
+    int keyPos = json.indexOf(keyQuoted, start);
+    if (keyPos < 0) return -1;
+    int colon = json.indexOf(':', keyPos + keyQuoted.length());
+    if (colon < 0) return -1;
+    int numStart = colon + 1;
+    while (numStart < (int)json.length() && (json[numStart] == ' ' || json[numStart] == '\t')) numStart++;
+    int numEnd = numStart;
+    bool neg = false;
+    if (numEnd < (int)json.length() && json[numEnd] == '-') {
+        neg = true;
+        numEnd++;
+    }
+    while (numEnd < (int)json.length() && json[numEnd] >= '0' && json[numEnd] <= '9') numEnd++;
+    if (numEnd == numStart) return -1;
+    value = json.substring(numStart, numEnd).toInt();
+    if (neg) value = -value;
+    end = numEnd;
+    return 0;
+}
+
+bool parseMapJson(const String& json, int axes[6], int buttons[16], int thresholds[16]) {
+    int pos = 0;
+    for (int i = 0; i < 6; i++) {
+        int v = 0;
+        int next = 0;
+        if (readIntFromJson(json, String("a") + String(i), pos, v, next) != 0) return false;
+        if (v < 0 || v >= 16) return false;
+        axes[i] = v;
+        pos = next;
+    }
+    for (int i = 0; i < 16; i++) {
+        int b = 0;
+        int next = 0;
+        if (readIntFromJson(json, String("b") + String(i), pos, b, next) != 0) return false;
+        if (b < 0 || b >= 16) return false;
+        buttons[i] = b;
+        pos = next;
+    }
+    for (int i = 0; i < 16; i++) {
+        int t = 1500;
+        int next = 0;
+        if (readIntFromJson(json, String("t") + String(i), pos, t, next) != 0) {
+            thresholds[i] = 1500;
+            pos = next > 0 ? next : pos;
+            continue;
+        }
+        if (t < 900 || t > 1900) return false;
+        thresholds[i] = t;
+        pos = next;
+    }
+    return true;
+}
+
 // ==================== CORE 0: USB & LOGIC ====================
 void handleCLI() {
     static String inputBuff = "";
@@ -451,6 +506,23 @@ void handleCLI() {
                     applyDefaultMapping();
                     changed = true;
                     Serial.println("{\"type\":\"ack\",\"set\":\"defaults\"}");
+                } else if (inputBuff.startsWith("app set map ")) {
+                    String json = inputBuff.substring(13);
+                    int axes[6];
+                    int buttons[16];
+                    int thresholds[16];
+                    bool okAxes = parseMapJson(json, axes, buttons, thresholds);
+                    if (okAxes) {
+                        for (int i = 0; i < 6; i++) axisMap[i] = (uint8_t)axes[i];
+                        for (int i = 0; i < 16; i++) {
+                            buttonMap[i] = (uint8_t)buttons[i];
+                            buttonThreshold[i] = (uint16_t)thresholds[i];
+                        }
+                        changed = true;
+                        Serial.println("{\"type\":\"ack\",\"set\":\"map\"}");
+                    } else {
+                        Serial.println("{\"type\":\"error\",\"msg\":\"bad_map_json\"}");
+                    }
                 }
 
                 if (changed) {

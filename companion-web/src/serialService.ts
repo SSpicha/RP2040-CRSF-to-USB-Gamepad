@@ -130,7 +130,11 @@ export class SerialService {
               throw new Error("missing type");
             }
             const { type, ...rest } = parsed;
-            onMessage({ type, ...rest } as IncomingMessage);
+            const message: IncomingMessage =
+              type === "status" || type === "map"
+                ? ({ type, ...rest } as DeviceStatus | MapPayload)
+                : { type, ...rest };
+            onMessage(message);
           } catch (error) {
             console.warn("SerialService: failed to parse JSON line", trimmed, error);
             onMessage({ type: "parse_error", raw: trimmed });

@@ -17,6 +17,7 @@ function metricTone(value: number, warnAt: number, dangerAt: number): "ok" | "wa
 export function App() {
   const serialRef = useRef<SerialService>(new SerialService());
   const [connected, setConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [status, setStatus] = useState<DeviceStatus | null>(null);
   const [channels, setChannels] = useState<number[]>(new Array(16).fill(992));
   const [axisMap, setAxisMap] = useState<AxisMapping[]>([
@@ -27,7 +28,9 @@ export function App() {
     { ch: 3 },
     { ch: 2 }
   ]);
-  const [buttonMap, setButtonMap] = useState<Array<{ idx: number; ch: number; th: number }>>(
+  const [buttonMap, setButtonMap] = useState<
+    Array<{ idx: number; ch: number; th: number }>
+  >(
     Array.from({ length: 16 }, (_, i) => ({ idx: i, ch: 6 + (i % 10), th: 1500 }))
   );
   const [logs, setLogs] = useState<string[]>([]);
@@ -41,20 +44,32 @@ export function App() {
   };
 
   const onMessage = (msg: IncomingMessage) => {
-    if (typeof msg.type !== "string") {
+    if (typeof msg?.type !== "string") {
       appendLog(JSON.stringify(msg));
       return;
     }
     if (msg.type === "status") {
-      const parsed = msg as DeviceStatus;
-      setStatus(parsed);
-      if (parsed.channels) setChannels(parsed.channels);
+      setStatus(msg as DeviceStatus);
+      if ("channels" in msg && Array.isArray((msg as DeviceStatus).channels)) {
+        setChannels((msg as DeviceStatus).channels ?? []);
+      }
       return;
     }
     if (msg.type === "map") {
-      const parsed = msg as MapPayload;
-      setAxisMap(parsed.axes.slice(0, 6));
-      setButtonMap(parsed.buttons.slice(0, 16));
+      setAxisMap((msg as MapPayload).axes.slice(0, 6));
+      setButtonMap((msg as MapPayload).buttons.slice(0, 16));
+      return;
+    }
+    if (msg.type === "line" && "raw" in msg && typeof msg.raw === "string") {
+      appendLog(msg.raw);
+      return;
+    }
+    if (msg.type === "error" && "message" in msg && typeof msg.message === "string") {
+      appendLog(msg.message);
+      return;
+    }
+    if (msg.type === "parse_error" && "raw" in msg && typeof msg.raw === "string") {
+      appendLog(msg.raw);
       return;
     }
     appendLog(JSON.stringify(msg));
@@ -62,19 +77,21 @@ export function App() {
 
   const connect = async () => {
     try {
+      setConnectionError(null);
       await serialRef.current.connect(115200);
       setConnected(true);
       appendLog("Connected");
-      const disconnectOnStale = async () => {
-        appendLog("No data received for 10s — disconnecting.");
-        await disconnect();
-        appendLog("Reconnect manually.");
+      const onStale = () => {
+        appendLog("No data received for 10s — connection lost.");
+        serialRef.current.disconnect();
+        setConnected(false);
       };
-      void serialRef.current.startReadLoop(onMessage, disconnectOnStale);
+      void serialRef.current.startReadLoop(onMessage, onStale);
       await serialRef.current.send("app get proto");
       await serialRef.current.send("app get map");
       await serialRef.current.send("app sub telemetry 100");
     } catch (err) {
+      setConnectionError((err as Error).message);
       appendLog(`Connect error: ${(err as Error).message}`);
     }
   };
@@ -86,6 +103,7 @@ export function App() {
         await serialRef.current.disconnect();
       }
       setConnected(false);
+      setConnectionError(null);
       appendLog("Disconnected");
     } catch (err) {
       appendLog(`Disconnect error: ${(err as Error).message}`);
@@ -106,24 +124,6 @@ export function App() {
     });
   };
 
-  const ensureConnected = async (retries = 2) => {
-    const attempt = async () => {
-      if (serialRef.current.isConnected()) return true;
-      appendLog("Connection lost, reconnecting...");
-      await connect();
-      return serialRef.current.isConnected();
-    };
-
-    for (let i = 0; i < retries; i++) {
-      if (await attempt()) {
-        appendLog("Reconnected.");
-        return true;
-      }
-    }
-    appendLog("Reconnect failed.");
-    return false;
-  };
-
   const sendWithRetry = async (command: string, retries = 2) => {
     for (let i = 0; i < retries; i++) {
       try {
@@ -131,8 +131,6 @@ export function App() {
         return;
       } catch {
         appendLog(`Send failed, retrying (${i + 1}/${retries})`);
-        const ok = await ensureConnected(1);
-        if (!ok) break;
       }
     }
     appendLog(`Command dropped after retries: ${command}`);
@@ -148,9 +146,7 @@ export function App() {
         await sendWithRetry(`app set axis ${i} ${clamp(axisMap[i]?.ch ?? 0, 0, 15)}`);
       }
       for (const b of buttonMap) {
-        await sendWithRetry(
-          `app set button ${b.idx} ${clamp(b.ch, 0, 15)} ${clamp(b.th, 900, 1900)}`
-        );
+        await sendWithRetry(`app set button ${b.idx} ${clamp(b.ch, 0, 15)} ${clamp(b.th, 900, 1900)}`);
       }
       await sendWithRetry("app get map");
       appendLog("Mapping applied.");
@@ -187,8 +183,7 @@ export function App() {
     if (!demoMode) return;
     const id = window.setInterval(() => {
       const t = Date.now() - demoStartRef.current;
-      const wave = (phase: number, amp: number) =>
-        Math.round(992 + Math.sin((t + phase) / 420) * amp);
+      const wave = (phase: number, amp: number) => Math.round(992 + Math.sin((t + phase) / 420) * amp);
 
       const demoChannels = Array.from({ length: 16 }, (_, i) => {
         if (i < 6) return clamp(wave(i * 160, 700 - i * 60), 172, 1811);
@@ -200,13 +195,12 @@ export function App() {
       const age = 2 + Math.round((Math.sin(t / 600) + 1) * 2);
       const rfLq = clamp(95 + Math.round(Math.sin(t / 2500) * 4), 75, 100);
       const quality = clamp(rfLq - Math.round(age * 1.5), 0, 100);
-      const uptime = t;
 
       setChannels(demoChannels);
       setStatus({
         type: "status",
         proto: "1.0-demo",
-        uptime_ms: uptime,
+        uptime_ms: t,
         mode: "gamepad",
         link_active: true,
         packet_rate_hz: pkt,
@@ -276,9 +270,7 @@ export function App() {
           </button>
           <button onClick={toggleDemoMode}>{demoMode ? "Stop demo" : "Start demo"}</button>
         </div>
-        <p>Connected: {connected ? "Yes" : "No"}</p>
-        <p>Demo mode: {demoMode ? "On" : "Off"}</p>
-        <p>Uptime: {status ? `${Math.floor(status.uptime_ms / 1000)} s` : "-"}</p>
+        {connectionError && <p className="warn">{connectionError}</p>}
       </section>
 
       <section className="card">

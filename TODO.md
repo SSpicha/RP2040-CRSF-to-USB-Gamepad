@@ -1,10 +1,10 @@
 # TODO
 
 ## Beta blockers
-- [ ] Add wiring diagram and Betaflight example config.
-- [ ] Add retry/resend logic in companion web for mid-operation disconnects.
-- [x] Reduce 1-minute web app freeze risk (serial read loop / frame timeout / decode robustness). Added read timeout + stale-data watchdog + reconnect hooks.
-- [ ] Document how to reproduce freeze reports and expected logs.
+- [x] Add wiring diagram and Betaflight example config.
+- [x] Add retry/resend logic in companion web for mid-operation disconnects.
+- [x] Reduce 1-minute web app freeze risk (serial ...[truncated]
+- [x] Document how to reproduce freeze reports and expected logs.
 
 ## In progress
 - [x] Core0/Core1 snapshot sync validation: fixed `snapshotSharedDataCopyFrom()` read sequencer; bounded retry against in-flight writes and preserved generator monotonicity. Build verified on `yd_rp2040`.

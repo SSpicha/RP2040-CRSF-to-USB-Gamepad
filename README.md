@@ -9,9 +9,8 @@ This branch, `feature/companion-app-v1`, is a **beta** release. The companion ap
 - After roughly **1 minute of operation**, the web app may **freeze** and the RP2040 may also become unreachable over Serial. If that happens, close the tab, replug the device, and reopen `companion-app.html`.
 - Companion-web forces `115200` baud. Older scripts/configs expecting `420000` will need updating.
 - Mapping updates are sent one command at a time, so full remap can feel slow on lossy links.
-- There is no retry/resend logic yet for mid-operation disconnects.
+- Retry/resend logic is limited; long lossy links may still drop commands.
 - Core 0/Core 1 synchronization uses a blocking mutex; extreme CRSF jitter can affect USB HID timing.
-- Wiring diagram, Betaflight example config, and troubleshooting are not yet included.
 
 ## How to test (beta checklist)
 - [ ] Flash `release/firmware.uf2`
@@ -43,5 +42,41 @@ This branch, `feature/companion-app-v1`, is a **beta** release. The companion ap
 *   **Baud Rate**: 230400 for stable telemetry performance.
 *   **EEPROM**: Automatic configuration persistence.
 
+## Wiring
+
+| RP2040 Pin | Function | Notes |
+|------------|----------|-------|
+| **GP0** (UART0 TX) | CRSF RX (to RX module) | 3.3 V logic |
+| **GP1** (UART0 RX) | CRSF TX (from RX module) | 3.3 V logic |
+| **GND** | Ground | Common with RX |
+| **VBUS** / **3V3** | Power (optional) | Only if powering RX from board |
+
+```
+CRSF Receiver          RP2040
+┌─────────────┐        ┌─────────────┐
+│  TX  ◄──────┼────────┤ GP1 (RX0)   │
+│  RX  ───────┼────────┤ GP0 (TX0)   │
+│  GND ◄──────┼────────┤ GND         │
+│  3V3/VBUS ┌─┼────────┤ 3V3/VBUS    │
+└───────────┘│         └─────────────┘
+             └───── Optional: power RX from board
+```
+
+> **Important**: CRSF uses inverted UART on some receivers (ELRS). If you get garbled data, enable `inverted` in firmware (`CRSF_PIO.h`) or use a hardware inverter.
+
+## Betaflight Config Example
+
+```diff
+# In Betaflight CLI:
+serial 20 64 115200 57600 0 115200
+set serialrx_provider = CRSF
+set serialrx_halfduplex = OFF
+set serialrx_inverted = ON    # if using ELRS RX with inverted UART
+save
+```
+
+*Use UART2 (or any free UART) on your flight controller. Match baud to 420000 for ELRS, or 230400 for Crossfire.*
+
 ---
+
 *Created for using RC transmitters in simulators and games.*

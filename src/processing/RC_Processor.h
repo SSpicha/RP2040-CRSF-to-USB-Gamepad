@@ -16,7 +16,7 @@ public:
 
     int16_t processAxis(uint16_t raw, int index, float dt) {
         // Mapping CRSF (172-1811) to HID (-32767 to 32767)
-        int16_t target;
+        int32_t target;
         if (abs((int)raw - 992) < _cfg.deadband) {
             target = 0;
         } else if (raw >= 992) {
@@ -24,10 +24,12 @@ public:
         } else {
             target = ((int32_t)(raw - 992) * 32767) / (992 - 172);
         }
+        
+        target = constrain(target, -32767, 32767);
 
         if (!_cfg.smoothingEnabled) {
             _lastValues[index] = target;
-            return target;
+            return (int16_t)target;
         }
 
         // PT1 Filter for smoothing
@@ -35,17 +37,10 @@ public:
         float alpha = dt / (rc + dt);
         
         _lastValues[index] += alpha * (target - _lastValues[index]);
-
         return (int16_t)_lastValues[index];
-    }
-
-    int16_t processThrottle(uint16_t raw) {
-        int32_t val = ((int32_t)(raw - 172) * 65534) / (1811 - 172) - 32767;
-        return (int16_t)constrain(val, -32767, 32767);
     }
 
 private:
     Config _cfg;
     float _lastValues[16] = {0};
-    uint32_t _lastTime = 0;
 };

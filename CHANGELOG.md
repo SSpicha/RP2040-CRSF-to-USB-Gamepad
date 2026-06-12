@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.1.3-beta] — Mapping Fixes & Processing Unity
+
+### Fixed
+- **Axis Mapping Mismatch:** Fixed data structure mismatch between firmware (array of numbers) and Web Companion (array of objects), preventing correct mapping application.
+- **Unified Processing:** Refactored `RC_Processor` to use a single `processAxis` method for all 6 axes (replacing the redundant `processThrottle`), ensuring consistent smoothing, deadband, and scaling.
+- **HID Axis Order:** Standardized HID report axis order (X, Y, Z, RX, RY, RZ) for better compatibility with simulators and games.
+- **EEPROM Config Persistence:** Fixed a compilation error and added debug logging to `loadConfig` to trace configuration loading and verify EEPROM persistence.
+
+### Changed
+- Standardized default axis mapping to AETR sequence (Roll, Pitch, Throttle, Yaw, AUX1, AUX2) for out-of-the-box compatibility.
+- Updated Web Companion to match the new standard AETR-to-Gamepad axis sequence.
+
 ## [4.1.2-beta] — Stability & Optimization Update
 
 ### Fixed

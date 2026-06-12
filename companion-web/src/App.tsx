@@ -23,10 +23,10 @@ export function App() {
   const [axisMap, setAxisMap] = useState<AxisMapping[]>([
     { ch: 0 },
     { ch: 1 },
-    { ch: 4 },
-    { ch: 5 },
+    { ch: 2 },
     { ch: 3 },
-    { ch: 2 }
+    { ch: 4 },
+    { ch: 5 }
   ]);
   const [buttonMap, setButtonMap] = useState<
     Array<{ idx: number; ch: number; th: number }>

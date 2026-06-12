@@ -71,7 +71,7 @@ struct RuntimeStats {
     int8_t rfSnrDb;
 } runtimeStats;
 
-uint8_t axisMap[6] = {0, 1, 4, 5, 3, 2}; // x y z rz rx ry
+uint8_t axisMap[6] = {0, 1, 2, 3, 4, 5}; // x y z rx ry rz
 uint8_t buttonMap[16] = {6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 6, 7, 8, 9, 10, 11};
 uint16_t buttonThreshold[16] = {
     1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500,
@@ -97,7 +97,7 @@ static inline uint8_t clampChannelIndex(int v) {
 }
 
 void applyDefaultMapping() {
-    const uint8_t defaultsAxis[6] = {0, 1, 4, 5, 3, 2};
+    const uint8_t defaultsAxis[6] = {0, 1, 2, 3, 4, 5};
     for (int i = 0; i < 6; i++) axisMap[i] = defaultsAxis[i];
     for (int i = 0; i < 16; i++) {
         buttonMap[i] = 6 + (i % 10);
@@ -213,7 +213,7 @@ void printJsonStatus(bool includeChannels) {
 void printJsonMap() {
     Serial.print("{\"type\":\"map\",\"axes\":[");
     for (int i = 0; i < 6; i++) {
-        Serial.print(axisMap[i]);
+        Serial.printf("{\"ch\":%u}", axisMap[i]);
         if (i < 5) Serial.print(",");
     }
     Serial.print("],\"buttons\":[");
@@ -225,26 +225,6 @@ void printJsonMap() {
 }
 
 // ==================== EEPROM HELPERS ====================
-void loadConfig() {
-    EEPROM.begin(512);
-    EEPROM.get(0, storage);
-
-    if (storage.magic == EEPROM_MAGIC && storage.version >= CONFIG_VERSION) {
-        rcConfig = storage.cfg;
-        memcpy(axisMap, storage.axisMap, sizeof(axisMap));
-        memcpy(buttonMap, storage.buttonMap, sizeof(buttonMap));
-        memcpy(buttonThreshold, storage.buttonThreshold, sizeof(buttonThreshold));
-    } else {
-        // Factory Defaults
-        rcConfig.smoothingEnabled = false;
-        rcConfig.smoothingCutoff = 50.0f;
-        rcConfig.deadband = 4;
-        applyDefaultMapping();
-    }
-    validateMapping();
-    processor.setConfig(rcConfig);
-}
-
 void saveConfig() {
     storage.magic = EEPROM_MAGIC;
     storage.version = CONFIG_VERSION;
@@ -254,6 +234,31 @@ void saveConfig() {
     memcpy(storage.buttonThreshold, buttonThreshold, sizeof(buttonThreshold));
     EEPROM.put(0, storage);
     EEPROM.commit();
+}
+
+void loadConfig() {
+    EEPROM.begin(512);
+    EEPROM.get(0, storage);
+    
+    Serial.printf("DEBUG: EEPROM Magic: 0x%08X, Version: %d\n", storage.magic, storage.version);
+
+    if (storage.magic == EEPROM_MAGIC && storage.version >= CONFIG_VERSION) {
+        Serial.println("DEBUG: Config loaded successfully.");
+        rcConfig = storage.cfg;
+        memcpy(axisMap, storage.axisMap, sizeof(axisMap));
+        memcpy(buttonMap, storage.buttonMap, sizeof(buttonMap));
+        memcpy(buttonThreshold, storage.buttonThreshold, sizeof(buttonThreshold));
+    } else {
+        Serial.println("DEBUG: Config invalid or outdated. Loading Factory Defaults.");
+        // Factory Defaults
+        rcConfig.smoothingEnabled = false;
+        rcConfig.smoothingCutoff = 50.0f;
+        rcConfig.deadband = 4;
+        applyDefaultMapping();
+        saveConfig(); // Save defaults immediately
+    }
+    validateMapping();
+    processor.setConfig(rcConfig);
 }
 
 // ==================== HID DESCRIPTOR ====================
@@ -266,9 +271,9 @@ uint8_t const desc_hid_report[] = {
         HID_USAGE ( HID_USAGE_DESKTOP_X ),
         HID_USAGE ( HID_USAGE_DESKTOP_Y ),
         HID_USAGE ( HID_USAGE_DESKTOP_Z ),
-        HID_USAGE ( HID_USAGE_DESKTOP_RZ ),
         HID_USAGE ( HID_USAGE_DESKTOP_RX ),
         HID_USAGE ( HID_USAGE_DESKTOP_RY ),
+        HID_USAGE ( HID_USAGE_DESKTOP_RZ ),
         HID_LOGICAL_MIN_N ( -32767, 2 ),
         HID_LOGICAL_MAX_N ( 32767, 2 ),
         HID_REPORT_COUNT ( 6 ),
@@ -286,7 +291,7 @@ uint8_t const desc_hid_report[] = {
 };
 
 typedef struct __attribute__((packed)) {
-    int16_t x, y, z, rz, rx, ry;
+    int16_t x, y, z, rx, ry, rz;
     uint32_t buttons;
 } GamepadReport;
 
@@ -507,7 +512,7 @@ void handleCLI() {
                     changed = true;
                     Serial.println("{\"type\":\"ack\",\"set\":\"defaults\"}");
                 } else if (inputBuff.startsWith("app set map ")) {
-                    String json = inputBuff.substring(13);
+                    String json = inputBuff.substring(12);
                     int axes[6];
                     int buttons[16];
                     int thresholds[16];
@@ -525,6 +530,7 @@ void handleCLI() {
                     }
                 }
 
+
                 if (changed) {
                     validateMapping();
                     processor.setConfig(rcConfig);
@@ -534,7 +540,7 @@ void handleCLI() {
             inputBuff = "";
             Serial.print("# ");
         } else {
-            inputBuff += c;
+            if (inputBuff.length() < 256) inputBuff += c;
         }
     }
 }
@@ -616,7 +622,7 @@ void loop() {
             gotMutex = true;
             break;
         }
-        if (millis() - readStart > 2) {
+        if (millis() - readStart > 10) {
             runtimeStats.mutexMissedReads++;
             link = false;
             memset(ch, 0, sizeof(ch));
@@ -676,9 +682,9 @@ void loop() {
         report.x  = processor.processAxis(ch[axisMap[0]], 0, dt);
         report.y  = processor.processAxis(ch[axisMap[1]], 1, dt);
         report.z  = processor.processAxis(ch[axisMap[2]], 2, dt);
-        report.rz = processor.processAxis(ch[axisMap[3]], 3, dt);
-        report.rx = processor.processAxis(ch[axisMap[4]], 4, dt);
-        report.ry = processor.processThrottle(ch[axisMap[5]]);
+        report.rx = processor.processAxis(ch[axisMap[3]], 3, dt);
+        report.ry = processor.processAxis(ch[axisMap[4]], 4, dt);
+        report.rz = processor.processAxis(ch[axisMap[5]], 5, dt);
         
         report.buttons = 0;
         for (int i = 0; i < 16; i++) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.1.1-beta] — Portable Companion App
+
+### Added
+- Single-file build for the companion web app using `vite-plugin-singlefile`.
+  - The entire app is now bundled into a single `companion-app.html` file.
+  - Supports direct execution from the filesystem (`file://` protocol).
+  - No local server required for basic usage (Web Serial still requires a compatible browser).
+
+### Changed
+- Updated Vite configuration to use relative base paths for better portability.
+- Refreshed `release/companion-app.html` with the latest portable build.
+
 ## [4.1.0-beta] — Companion App Beta
 
 ### Added

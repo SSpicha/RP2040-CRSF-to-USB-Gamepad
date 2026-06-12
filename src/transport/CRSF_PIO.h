@@ -66,8 +66,8 @@ public:
     }
 
     uint32_t available() {
-        uint32_t curr_pos = BUFFER_SIZE - (dma_hw->ch[_dma_chan].transfer_count % BUFFER_SIZE);
-        if (curr_pos == BUFFER_SIZE) curr_pos = 0;
+        // Use write address directly since buffer is aligned and ring is power of 2
+        uint32_t curr_pos = dma_hw->ch[_dma_chan].write_addr & (BUFFER_SIZE - 1);
 
         uint32_t buffered = 0;
         if (curr_pos >= _read_ptr) buffered = curr_pos - _read_ptr;

@@ -142,14 +142,22 @@ export function App() {
 
   const applyMap = async () => {
     try {
-      for (let i = 0; i < axisMap.length; i++) {
-        await sendWithRetry(`app set axis ${i} ${clamp(axisMap[i]?.ch ?? 0, 0, 15)}`);
-      }
-      for (const b of buttonMap) {
-        await sendWithRetry(`app set button ${b.idx} ${clamp(b.ch, 0, 15)} ${clamp(b.th, 900, 1900)}`);
-      }
+      const payload = {
+        axes: axisMap.map(a => a.ch),
+        buttons: buttonMap.map(b => b.ch),
+        thresholds: buttonMap.map(b => b.th)
+      };
+      
+      const jsonStr = JSON.stringify({
+        a0: payload.axes[0], a1: payload.axes[1], a2: payload.axes[2],
+        a3: payload.axes[3], a4: payload.axes[4], a5: payload.axes[5],
+        ...Object.fromEntries(payload.buttons.map((ch, i) => [`b${i}`, ch])),
+        ...Object.fromEntries(payload.thresholds.map((th, i) => [`t${i}`, th]))
+      });
+
+      await sendWithRetry(`app set map ${jsonStr}`);
       await sendWithRetry("app get map");
-      appendLog("Mapping applied.");
+      appendLog("Mapping applied via bulk update.");
     } catch (err) {
       appendLog(`Apply map error: ${(err as Error).message}`);
     }

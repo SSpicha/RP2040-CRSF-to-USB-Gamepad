@@ -399,6 +399,8 @@ void handleCLI() {
         if (c == '\n' || c == '\r') {
             inputBuff.trim();
             if (inputBuff.length() > 0) {
+// ... (rest of method unchanged, but wait, I need to provide full content for replace)
+
                 bool changed = false;
                 
                 if (inputBuff == "version") {
@@ -669,13 +671,19 @@ void loop() {
         else pixel.setPixelColor(0, pixel.Color(0, 255, 0));
         pixel.show();
 
+        static uint32_t lastProcessTime = 0;
+        uint32_t curMicros = micros();
+        float dt = (curMicros - lastProcessTime) / 1000000.0f;
+        if (dt > 0.1f) dt = 0.001f; 
+        lastProcessTime = curMicros;
+
         static GamepadReport report;
         uint32_t t0 = micros();
-        report.x  = processor.processAxis(ch[axisMap[0]], 0);
-        report.y  = processor.processAxis(ch[axisMap[1]], 1);
-        report.z  = processor.processAxis(ch[axisMap[2]], 2);
-        report.rz = processor.processAxis(ch[axisMap[3]], 3);
-        report.rx = processor.processAxis(ch[axisMap[4]], 4);
+        report.x  = processor.processAxis(ch[axisMap[0]], 0, dt);
+        report.y  = processor.processAxis(ch[axisMap[1]], 1, dt);
+        report.z  = processor.processAxis(ch[axisMap[2]], 2, dt);
+        report.rz = processor.processAxis(ch[axisMap[3]], 3, dt);
+        report.rx = processor.processAxis(ch[axisMap[4]], 4, dt);
         report.ry = processor.processThrottle(ch[axisMap[5]]);
         
         report.buttons = 0;

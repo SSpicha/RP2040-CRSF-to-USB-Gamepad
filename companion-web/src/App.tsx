@@ -106,21 +106,53 @@ export function App() {
     });
   };
 
+  const ensureConnected = async (retries = 2) => {
+    const attempt = async () => {
+      if (serialRef.current.isConnected()) return true;
+      appendLog("Connection lost, reconnecting...");
+      await connect();
+      return serialRef.current.isConnected();
+    };
+
+    for (let i = 0; i < retries; i++) {
+      if (await attempt()) {
+        appendLog("Reconnected.");
+        return true;
+      }
+    }
+    appendLog("Reconnect failed.");
+    return false;
+  };
+
+  const sendWithRetry = async (command: string, retries = 2) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await serialRef.current.send(command);
+        return;
+      } catch {
+        appendLog(`Send failed, retrying (${i + 1}/${retries})`);
+        const ok = await ensureConnected(1);
+        if (!ok) break;
+      }
+    }
+    appendLog(`Command dropped after retries: ${command}`);
+  };
+
   const requestChannels = async () => {
-    await serialRef.current.send("app get channels");
+    await sendWithRetry("app get channels");
   };
 
   const applyMap = async () => {
     try {
       for (let i = 0; i < axisMap.length; i++) {
-        await serialRef.current.send(`app set axis ${i} ${clamp(axisMap[i]?.ch ?? 0, 0, 15)}`);
+        await sendWithRetry(`app set axis ${i} ${clamp(axisMap[i]?.ch ?? 0, 0, 15)}`);
       }
       for (const b of buttonMap) {
-        await serialRef.current.send(
+        await sendWithRetry(
           `app set button ${b.idx} ${clamp(b.ch, 0, 15)} ${clamp(b.th, 900, 1900)}`
         );
       }
-      await serialRef.current.send("app get map");
+      await sendWithRetry("app get map");
       appendLog("Mapping applied.");
     } catch (err) {
       appendLog(`Apply map error: ${(err as Error).message}`);

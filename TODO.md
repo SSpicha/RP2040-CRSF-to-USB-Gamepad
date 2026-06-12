@@ -3,7 +3,7 @@
 ## Beta blockers
 - [ ] Add wiring diagram and Betaflight example config.
 - [ ] Add retry/resend logic in companion web for mid-operation disconnects.
-- [ ] Reduce 1-minute web app freeze risk (serial read loop / frame timeout / decode robustness).
+- [x] Reduce 1-minute web app freeze risk (serial read loop / frame timeout / decode robustness). Added read timeout + stale-data watchdog + reconnect hooks.
 - [ ] Document how to reproduce freeze reports and expected logs.
 
 ## In progress

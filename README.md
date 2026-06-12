@@ -6,11 +6,8 @@ A high-performance bridge converting **CRSF (ExpressLRS/Crossfire)** signals int
 This branch, `feature/companion-app-v1`, is a **beta** release. The companion app and firmware changes are usable, but some edges are still rough. Expect follow-up fixes for stability and docs.
 
 ## Known limitations
-- After roughly **1 minute of operation**, the web app may **freeze** and the RP2040 may also become unreachable over Serial. If that happens, close the tab, replug the device, and reopen `companion-app.html`.
-- Companion-web forces `115200` baud. Older scripts/configs expecting `420000` will need updating.
-- Mapping updates are sent one command at a time, so full remap can feel slow on lossy links.
-- Retry/resend logic is limited; long lossy links may still drop commands.
-- Core 0/Core 1 synchronization uses a blocking mutex; extreme CRSF jitter can affect USB HID timing.
+- Companion-web forces `115200` baud for the CLI interface.
+- Core 0/Core 1 synchronization uses a mutex; however, stability has been improved with increased timeouts.
 
 ## How to test (beta checklist)
 - [ ] Flash `release/firmware.uf2`
@@ -63,6 +60,23 @@ CRSF Receiver          RP2040
 ```
 
 > **Important**: CRSF uses inverted UART on some receivers (ELRS). If you get garbled data, enable `inverted` in firmware (`CRSF_PIO.h`) or use a hardware inverter.
+
+## Betaflight Config Example
+
+```diff
+# In Betaflight CLI:
+serial 20 64 115200 57600 0 115200
+set serialrx_provider = CRSF
+set serialrx_halfduplex = OFF
+set serialrx_inverted = ON    # if using ELRS RX with inverted UART
+save
+```
+
+*Use UART2 (or any free UART) on your flight controller. Match baud to 420000 for ELRS, or 230400 for Crossfire.*
+
+---
+
+*Created for using RC transmitters in simulators and games.*verted` in firmware (`CRSF_PIO.h`) or use a hardware inverter.
 
 ## Betaflight Config Example
 

@@ -4,7 +4,7 @@
 
 ### Fixed
 - **Per-Axis Smoothing:** Fixed a bug where smoothing was only applied to the first axis due to incorrect delta-time calculation across sequential calls.
-- **Transport Reliability:** Refactored PIO ring buffer logic to use direct DMA write address masking, preventing potential 1-byte offsets and improving data availability tracking.
+- **CRSF Transport Reliability:** Switched from PIO to Hardware UART (Serial1). This resolves ongoing link stability issues and provides a more robust data path for CRSF frames by leveraging RP2040's dedicated hardware controllers.
 - **Mutex Stability:** Increased data mutex timeout from 2ms to 10ms to prevent transient link-loss reports during high CPU load.
 - **CLI Safety:** Added length guarding to the CLI input buffer to prevent potential memory exhaustion from unbounded growth.
 - **Safety Guards:** Added a minimum threshold for smoothing cutoff frequency to prevent division-by-zero errors.

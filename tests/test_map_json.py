@@ -32,6 +32,9 @@ def parse_map_json(json: str):
     axes = [0] * 6
     buttons = [0] * 16
     thresholds = [1500] * 16
+    mins = [172] * 6
+    maxs = [1811] * 6
+    invs = [0] * 6
     pos = 0
     for i in range(6):
         v, next_pos, _ = _read_int_from_json(json, f'a{i}', pos)
@@ -55,7 +58,35 @@ def parse_map_json(json: str):
             return None
         thresholds[i] = t
         pos = next_pos
-    return axes, buttons, thresholds
+    for i in range(6):
+        m, next_pos, _ = _read_int_from_json(json, f'min{i}', pos)
+        if m is None:
+            mins[i] = 172
+            pos = next_pos if next_pos is not None else pos
+            continue
+        if m < 0 or m > 3000:
+            return None
+        mins[i] = m
+        pos = next_pos
+    for i in range(6):
+        x, next_pos, _ = _read_int_from_json(json, f'max{i}', pos)
+        if x is None:
+            maxs[i] = 1811
+            pos = next_pos if next_pos is not None else pos
+            continue
+        if x < 0 or x > 3000:
+            return None
+        maxs[i] = x
+        pos = next_pos
+    for i in range(6):
+        v, next_pos, _ = _read_int_from_json(json, f'inv{i}', pos)
+        if v is None:
+            invs[i] = 0
+            pos = next_pos if next_pos is not None else pos
+            continue
+        invs[i] = 1 if v else 0
+        pos = next_pos
+    return axes, buttons, thresholds, mins, maxs, invs
 
 
 def run() -> int:
@@ -66,11 +97,25 @@ def run() -> int:
     if parsed is None:
         failures.append("valid map json failed to parse")
     else:
-        axes, buttons, thresholds = parsed
+        axes, buttons, thresholds, mins, maxs, invs = parsed
         if axes != [0, 1, 5, 4, 3, 2] or buttons != [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5]:
             failures.append("valid map parsing produced wrong mapping")
         if thresholds[0] != 1500 or thresholds[15] != 1700:
             failures.append("valid map parsing produced wrong thresholds")
+        if mins != [172]*6 or maxs != [1811]*6 or invs != [0]*6:
+            failures.append("defaults for missing calibration mins/maxs/invs failed")
+
+    # test with custom calibration
+    payload_cal = '{"a0":0,"a1":1,"a2":5,"a3":4,"a4":3,"a5":2,"b0":6,"b1":7,"b2":8,"b3":9,"b4":10,"b5":11,"b6":12,"b7":13,"b8":14,"b9":15,"b10":0,"b11":1,"b12":2,"b13":3,"b14":4,"b15":5,"t0":1500,"t15":1700,"min0":200,"max0":1800,"inv0":1}'
+    parsed_cal = parse_map_json(payload_cal)
+    if parsed_cal is None:
+        failures.append("valid map with calibration json failed to parse")
+    else:
+        axes, buttons, thresholds, mins, maxs, invs = parsed_cal
+        if mins[0] != 200 or maxs[0] != 1800 or invs[0] != 1:
+            failures.append("calibration parameters parsing failed")
+        if mins[1] != 172 or maxs[1] != 1811 or invs[1] != 0:
+            failures.append("calibration parameters default fell back incorrectly for other axes")
 
     if parse_map_json('{"a0":0}') is not None:
         failures.append("partial map json should fail")

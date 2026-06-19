@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.1.4-beta] — Axis Calibration & Live Gamepad Preview
+
+### Added
+- **Live Gamepad SVG Preview:** Integrated the unused `GamepadSvg` visualizer into the Web Companion interface, showing real-time stick movements, trigger values, and button presses.
+- **Per-Axis Calibration:** Added custom minimum/maximum limits and inversion settings per axis.
+- **Calibration UI Controls:** Implemented **M (Min)** and **X (Max)** buttons to capture values from live channels, along with manual overrides and inversion toggles in the mapping editor.
+
+### Changed
+- **Config Version Upgrade:** Incremented `CONFIG_VERSION` to `3` to accommodate calibration settings in the EEPROM struct layout.
+- **UART Transport Refactoring:** Renamed the transport header `CRSF_PIO.h` to `CRSF_UART.h` to accurately reflect the hardware UART implementation.
+
+### Fixed
+- **Cleaned README:** Removed duplicated and corrupted markdown content at the end of the `README.md` file.
+
 ## [4.1.3-beta] — Mapping Fixes & Processing Unity
 
 ### Fixed

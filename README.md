@@ -59,24 +59,7 @@ CRSF Receiver          RP2040
              └───── Optional: power RX from board
 ```
 
-> **Important**: CRSF uses inverted UART on some receivers (ELRS). If you get garbled data, enable `inverted` in firmware (`CRSF_PIO.h`) or use a hardware inverter.
-
-## Betaflight Config Example
-
-```diff
-# In Betaflight CLI:
-serial 20 64 115200 57600 0 115200
-set serialrx_provider = CRSF
-set serialrx_halfduplex = OFF
-set serialrx_inverted = ON    # if using ELRS RX with inverted UART
-save
-```
-
-*Use UART2 (or any free UART) on your flight controller. Match baud to 420000 for ELRS, or 230400 for Crossfire.*
-
----
-
-*Created for using RC transmitters in simulators and games.*verted` in firmware (`CRSF_PIO.h`) or use a hardware inverter.
+> **Important**: CRSF uses inverted UART on some receivers (ELRS). If you get garbled data, enable `inverted` in firmware (`CRSF_UART.h`) or use a hardware inverter.
 
 ## Betaflight Config Example
 

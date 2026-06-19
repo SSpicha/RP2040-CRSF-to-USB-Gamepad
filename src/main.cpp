@@ -6,7 +6,7 @@
 #include <EEPROM.h>
 #include <math.h>
 
-#include "transport/CRSF_PIO.h"
+#include "transport/CRSF_UART.h"
 #include "parser/CRSF_Parser.h"
 #include "processing/RC_Processor.h"
 
@@ -17,7 +17,7 @@
 #define LED_PIN         16
 #define FAILSAFE_MS     500
 #define EEPROM_MAGIC    0x43525346 // 'CRSF' magic constant
-#define CONFIG_VERSION  2
+#define CONFIG_VERSION  3
 #define PROTO_VERSION   "1.0"
 
 // ==================== GLOBALS ====================
@@ -213,7 +213,11 @@ void printJsonStatus(bool includeChannels) {
 void printJsonMap() {
     Serial.print("{\"type\":\"map\",\"axes\":[");
     for (int i = 0; i < 6; i++) {
-        Serial.printf("{\"ch\":%u}", axisMap[i]);
+        Serial.printf("{\"ch\":%u,\"min\":%u,\"max\":%u,\"invert\":%s}", 
+            axisMap[i], 
+            rcConfig.axes[i].min, 
+            rcConfig.axes[i].max, 
+            rcConfig.axes[i].invert ? "true" : "false");
         if (i < 5) Serial.print(",");
     }
     Serial.print("],\"buttons\":[");
@@ -254,6 +258,11 @@ void loadConfig() {
         rcConfig.smoothingEnabled = false;
         rcConfig.smoothingCutoff = 50.0f;
         rcConfig.deadband = 4;
+        for (int i = 0; i < 6; i++) {
+            rcConfig.axes[i].min = 172;
+            rcConfig.axes[i].max = 1811;
+            rcConfig.axes[i].invert = 0;
+        }
         applyDefaultMapping();
         saveConfig(); // Save defaults immediately
     }
@@ -363,7 +372,7 @@ int readIntFromJson(const String& json, const String& key, int start, int& value
     return 0;
 }
 
-bool parseMapJson(const String& json, int axes[6], int buttons[16], int thresholds[16]) {
+bool parseMapJson(const String& json, int axes[6], int buttons[16], int thresholds[16], int mins[6], int maxs[6], int invs[6]) {
     int pos = 0;
     for (int i = 0; i < 6; i++) {
         int v = 0;
@@ -391,6 +400,41 @@ bool parseMapJson(const String& json, int axes[6], int buttons[16], int threshol
         }
         if (t < 900 || t > 1900) return false;
         thresholds[i] = t;
+        pos = next;
+    }
+    for (int i = 0; i < 6; i++) {
+        int m = 172;
+        int next = 0;
+        if (readIntFromJson(json, String("min") + String(i), pos, m, next) != 0) {
+            mins[i] = 172;
+            pos = next > 0 ? next : pos;
+            continue;
+        }
+        if (m < 0 || m > 3000) return false;
+        mins[i] = m;
+        pos = next;
+    }
+    for (int i = 0; i < 6; i++) {
+        int x = 1811;
+        int next = 0;
+        if (readIntFromJson(json, String("max") + String(i), pos, x, next) != 0) {
+            maxs[i] = 1811;
+            pos = next > 0 ? next : pos;
+            continue;
+        }
+        if (x < 0 || x > 3000) return false;
+        maxs[i] = x;
+        pos = next;
+    }
+    for (int i = 0; i < 6; i++) {
+        int v = 0;
+        int next = 0;
+        if (readIntFromJson(json, String("inv") + String(i), pos, v, next) != 0) {
+            invs[i] = 0;
+            pos = next > 0 ? next : pos;
+            continue;
+        }
+        invs[i] = v ? 1 : 0;
         pos = next;
     }
     return true;
@@ -516,9 +560,17 @@ void handleCLI() {
                     int axes[6];
                     int buttons[16];
                     int thresholds[16];
-                    bool okAxes = parseMapJson(json, axes, buttons, thresholds);
+                    int mins[6];
+                    int maxs[6];
+                    int invs[6];
+                    bool okAxes = parseMapJson(json, axes, buttons, thresholds, mins, maxs, invs);
                     if (okAxes) {
-                        for (int i = 0; i < 6; i++) axisMap[i] = (uint8_t)axes[i];
+                        for (int i = 0; i < 6; i++) {
+                            axisMap[i] = (uint8_t)axes[i];
+                            rcConfig.axes[i].min = (uint16_t)mins[i];
+                            rcConfig.axes[i].max = (uint16_t)maxs[i];
+                            rcConfig.axes[i].invert = (uint8_t)invs[i];
+                        }
                         for (int i = 0; i < 16; i++) {
                             buttonMap[i] = (uint8_t)buttons[i];
                             buttonThreshold[i] = (uint16_t)thresholds[i];

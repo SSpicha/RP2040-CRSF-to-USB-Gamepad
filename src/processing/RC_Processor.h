@@ -3,10 +3,17 @@
 
 class RCProcessor {
 public:
+    struct AxisConfig {
+        uint16_t min = 172;
+        uint16_t max = 1811;
+        uint8_t invert = 0; // 0 = normal, 1 = inverted
+    };
+
     struct Config {
         bool smoothingEnabled = false;
         float smoothingCutoff = 50.0f; // Hz
         uint16_t deadband = 4;
+        AxisConfig axes[6];
     };
 
     void setConfig(const Config &cfg) { 
@@ -15,17 +22,33 @@ public:
     }
 
     int16_t processAxis(uint16_t raw, int index, float dt) {
-        // Mapping CRSF (172-1811) to HID (-32767 to 32767)
+        // Dynamic mapping based on calibration min/max values per axis
+        uint16_t minVal = (index >= 0 && index < 6) ? _cfg.axes[index].min : 172;
+        uint16_t maxVal = (index >= 0 && index < 6) ? _cfg.axes[index].max : 1811;
+        uint16_t centerVal = (minVal + maxVal) / 2;
+
         int32_t target;
-        if (abs((int)raw - 992) < _cfg.deadband) {
+        if (abs((int)raw - centerVal) < _cfg.deadband) {
             target = 0;
-        } else if (raw >= 992) {
-            target = ((int32_t)(raw - 992) * 32767) / (1811 - 992);
+        } else if (raw >= centerVal) {
+            if (maxVal > centerVal) {
+                target = ((int32_t)(raw - centerVal) * 32767) / (maxVal - centerVal);
+            } else {
+                target = 0;
+            }
         } else {
-            target = ((int32_t)(raw - 992) * 32767) / (992 - 172);
+            if (centerVal > minVal) {
+                target = ((int32_t)(raw - centerVal) * 32767) / (centerVal - minVal);
+            } else {
+                target = 0;
+            }
         }
         
         target = constrain(target, -32767, 32767);
+
+        if (index >= 0 && index < 6 && _cfg.axes[index].invert) {
+            target = -target;
+        }
 
         if (!_cfg.smoothingEnabled) {
             _lastValues[index] = target;

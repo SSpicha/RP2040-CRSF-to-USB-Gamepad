@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SerialService, type IncomingMessage } from "./serialService";
 import type { DeviceStatus, MapPayload, AxisMapping } from "./types";
+import { GamepadSvg } from "./GamepadSvg";
 
 const AXIS_NAMES = ["X", "Y", "Z", "RZ", "RX", "RY"] as const;
 
@@ -21,18 +22,26 @@ export function App() {
   const [status, setStatus] = useState<DeviceStatus | null>(null);
   const [channels, setChannels] = useState<number[]>(new Array(16).fill(992));
   const [axisMap, setAxisMap] = useState<AxisMapping[]>([
-    { ch: 0 },
-    { ch: 1 },
-    { ch: 2 },
-    { ch: 3 },
-    { ch: 4 },
-    { ch: 5 }
+    { ch: 0, min: 172, max: 1811, invert: false },
+    { ch: 1, min: 172, max: 1811, invert: false },
+    { ch: 2, min: 172, max: 1811, invert: false },
+    { ch: 3, min: 172, max: 1811, invert: false },
+    { ch: 4, min: 172, max: 1811, invert: false },
+    { ch: 5, min: 172, max: 1811, invert: false }
   ]);
   const [buttonMap, setButtonMap] = useState<
     Array<{ idx: number; ch: number; th: number }>
   >(
     Array.from({ length: 16 }, (_, i) => ({ idx: i, ch: 6 + (i % 10), th: 1500 }))
   );
+
+  const buttonStates = useMemo(() => {
+    return buttonMap.map((b) => {
+      const chVal = channels[b.ch] ?? 992;
+      return chVal > b.th;
+    });
+  }, [buttonMap, channels]);
+
   const [logs, setLogs] = useState<string[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [autoscrollLogs, setAutoscrollLogs] = useState(true);
@@ -142,18 +151,23 @@ export function App() {
 
   const applyMap = async () => {
     try {
-      const payload = {
-        axes: axisMap.map(a => a.ch),
-        buttons: buttonMap.map(b => b.ch),
-        thresholds: buttonMap.map(b => b.th)
-      };
+      const jsonPayload: Record<string, number> = {};
       
-      const jsonStr = JSON.stringify({
-        a0: payload.axes[0], a1: payload.axes[1], a2: payload.axes[2],
-        a3: payload.axes[3], a4: payload.axes[4], a5: payload.axes[5],
-        ...Object.fromEntries(payload.buttons.map((ch, i) => [`b${i}`, ch])),
-        ...Object.fromEntries(payload.thresholds.map((th, i) => [`t${i}`, th]))
+      // Axes channels, mins, maxs, and inverts
+      axisMap.forEach((a, i) => {
+        jsonPayload[`a${i}`] = a.ch;
+        jsonPayload[`min${i}`] = a.min ?? 172;
+        jsonPayload[`max${i}`] = a.max ?? 1811;
+        jsonPayload[`inv${i}`] = a.invert ? 1 : 0;
       });
+
+      // Buttons channels and thresholds
+      buttonMap.forEach((b, i) => {
+        jsonPayload[`b${i}`] = b.ch;
+        jsonPayload[`t${i}`] = b.th;
+      });
+
+      const jsonStr = JSON.stringify(jsonPayload);
 
       await sendWithRetry(`app set map ${jsonStr}`);
       await sendWithRetry("app get map");
@@ -164,27 +178,96 @@ export function App() {
   };
 
   const axisRows = useMemo(
-    () =>
-      AXIS_NAMES.map((name, i) => {
-        const mapping = axisMap[i] ?? { ch: 0 };
-        return (
-          <div className="row" key={name}>
-            <span>{name}</span>
-            <input
-              type="number"
-              min={0}
-              max={15}
-              value={mapping.ch}
-              onChange={(e) => {
-                const next = [...axisMap];
-                next[i] = { ch: Number(e.target.value) };
-                setAxisMap(next);
-              }}
-            />
-          </div>
-        );
-      }),
-    [axisMap]
+    () => (
+      <>
+        <div className="axisHeader">
+          <span>Name</span>
+          <span>CH</span>
+          <span>Min</span>
+          <span>Max</span>
+          <span style={{ textAlign: "center" }} title="Capture Min">M</span>
+          <span style={{ textAlign: "center" }} title="Capture Max">X</span>
+          <span style={{ textAlign: "center" }}>Inv</span>
+        </div>
+        {AXIS_NAMES.map((name, i) => {
+          const mapping = axisMap[i] ?? { ch: 0, min: 172, max: 1811, invert: false };
+          const currentMin = mapping.min ?? 172;
+          const currentMax = mapping.max ?? 1811;
+          const currentInvert = !!mapping.invert;
+
+          return (
+            <div className="axisRow" key={name}>
+              <span style={{ fontWeight: "bold" }}>{name}</span>
+              <input
+                type="number"
+                min={0}
+                max={15}
+                value={mapping.ch}
+                onChange={(e) => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, ch: Number(e.target.value) };
+                  setAxisMap(next);
+                }}
+              />
+              <input
+                type="number"
+                min={0}
+                max={3000}
+                value={currentMin}
+                onChange={(e) => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, min: Number(e.target.value) };
+                  setAxisMap(next);
+                }}
+              />
+              <input
+                type="number"
+                min={0}
+                max={3000}
+                value={currentMax}
+                onChange={(e) => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, max: Number(e.target.value) };
+                  setAxisMap(next);
+                }}
+              />
+              <button
+                className="btnMin"
+                onClick={() => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, min: channels[mapping.ch] ?? 172 };
+                  setAxisMap(next);
+                }}
+                title="Capture Min"
+              >
+                M
+              </button>
+              <button
+                className="btnMax"
+                onClick={() => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, max: channels[mapping.ch] ?? 1811 };
+                  setAxisMap(next);
+                }}
+                title="Capture Max"
+              >
+                X
+              </button>
+              <input
+                type="checkbox"
+                checked={currentInvert}
+                onChange={(e) => {
+                  const next = [...axisMap];
+                  next[i] = { ...mapping, invert: e.target.checked };
+                  setAxisMap(next);
+                }}
+              />
+            </div>
+          );
+        })}
+      </>
+    ),
+    [axisMap, channels]
   );
 
   useEffect(() => {
@@ -345,6 +428,11 @@ export function App() {
             <div className="metricValue">{status?.rf_stats_age_ms ?? 0} ms</div>
           </div>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>Gamepad Live Preview</h2>
+        <GamepadSvg channels={channels} axisMap={axisMap} buttons={buttonStates} />
       </section>
 
       <section className="card">
